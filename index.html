@@ -204,22 +204,23 @@
 <!-- ── SETTINGS MODAL ── -->
 <div class="modal-overlay" id="modal-settings">
   <div class="modal">
-    <h2>⚙️ GitHub Einstellungen</h2>
-    <div class="field">
-      <label>GitHub Benutzername / Organisation</label>
-      <input type="text" id="s-owner" placeholder="z.B. meinpraxis">
-    </div>
-    <div class="field">
-      <label>Repository Name</label>
-      <input type="text" id="s-repo" placeholder="z.B. fallzahl-dashboard">
+    <h2>⚙️ Schreibzugriff einrichten</h2>
+    <div class="field" style="display:flex;gap:8px">
+      <div style="flex:1">
+        <label>Repo</label>
+        <input type="text" id="s-owner" readonly style="background:#f5f5f5;color:#888">
+      </div>
+      <div style="flex:1">
+        <label>Name</label>
+        <input type="text" id="s-repo" readonly style="background:#f5f5f5;color:#888">
+      </div>
     </div>
     <div class="field">
       <label>Personal Access Token (PAT) — nur auf Praxis-Geräten eingeben</label>
       <input type="password" id="s-pat" placeholder="ghp_...">
       <p class="note">
-        Token wird nur in deinem Browser gespeichert (localStorage) — nie auf GitHub oder Notion sichtbar.<br>
-        Benötigt Scope: <strong>repo</strong> (für private Repos) oder <strong>public_repo</strong>.<br>
-        Ohne Token: nur Lesezugriff.
+        Nur nötig zum Speichern — Lesen funktioniert ohne Token.<br>
+        Token wird nur in deinem Browser gespeichert, nie hochgeladen.
       </p>
     </div>
     <div class="modal-footer">
@@ -323,18 +324,16 @@
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
-// CONFIG (stored in localStorage — device only)
+// CONFIG — owner/repo hardcoded, PAT optional (nur für Schreibzugriff)
 // ─────────────────────────────────────────────────────────────────────────────
-const CFG = {
-  OWNER: 'fz_gh_owner',
-  REPO:  'fz_gh_repo',
-  PAT:   'fz_gh_pat',
-};
+const OWNER = 'shnsn';
+const REPO  = 'fallzahl-dashboard';
+
 function getCfg() {
   return {
-    owner: localStorage.getItem(CFG.OWNER) || '',
-    repo:  localStorage.getItem(CFG.REPO)  || '',
-    pat:   localStorage.getItem(CFG.PAT)   || '',
+    owner: OWNER,
+    repo:  REPO,
+    pat:   localStorage.getItem('fz_gh_pat') || '',
   };
 }
 
@@ -351,43 +350,34 @@ let canWrite    = false;
 // GITHUB API
 // ─────────────────────────────────────────────────────────────────────────────
 async function loadData() {
-  const { owner, repo, pat } = getCfg();
-  if (!owner || !repo) {
-    openSettings();
-    return;
-  }
-
-  showStatus('info', '⏳ Lade Daten von GitHub…');
+  showStatus('info', '⏳ Lade Daten…');
 
   try {
-    // Use API endpoint (works for public repos without auth, and with auth for private)
-    const headers = { 'Accept': 'application/vnd.github+json' };
-    if (pat) headers['Authorization'] = `Bearer ${pat}`;
-
-    const resp = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contents/data.json`,
-      { headers, cache: 'no-store' }
-    );
+    // Öffentliches Repo → direkt von raw.githubusercontent.com lesen (kein Token nötig)
+    const url  = `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/data.json?t=${Date.now()}`;
+    const resp = await fetch(url, { cache: 'no-store' });
 
     if (resp.status === 404) {
       showStatus('err', '❌ data.json nicht gefunden — bitte ins Repo hochladen.');
       return;
     }
-    if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-    const json = await resp.json();
-    dataSha = json.sha;
-    const raw = JSON.parse(atob(json.content.replace(/\n/g, '')));
+    const raw = await resp.json();
 
     historical  = raw.historical  || [];
     predictions = raw.predictions || [];
-
     if (raw.qstart) document.getElementById('qstart').value = raw.qstart;
 
+    // SHA nur bei Bedarf (Schreiben) über API holen — hier nicht nötig
+    const pat = getCfg().pat;
     canWrite = !!pat;
     updateWriteBadge();
-    showStatus('ok', `✓ Daten geladen · ${owner}/${repo}`);
-    document.getElementById('repo-hint').textContent = `${owner}/${repo} · zuletzt geladen: ${new Date().toLocaleTimeString('de')}`;
+
+    const time = new Date().toLocaleTimeString('de', {hour:'2-digit', minute:'2-digit'});
+    showStatus('ok', `✓ Aktualisiert um ${time}`);
+    document.getElementById('repo-hint').textContent =
+      `shnsn/fallzahl-dashboard · ${time}`;
 
     setTimeout(() => hideStatus(), 3000);
     updateAll();
@@ -451,19 +441,16 @@ async function saveToGitHub() {
 // SETTINGS
 // ─────────────────────────────────────────────────────────────────────────────
 function openSettings() {
-  const { owner, repo, pat } = getCfg();
-  document.getElementById('s-owner').value = owner;
-  document.getElementById('s-repo').value  = repo;
-  document.getElementById('s-pat').value   = pat;
+  document.getElementById('s-owner').value = OWNER;
+  document.getElementById('s-repo').value  = REPO;
+  document.getElementById('s-pat').value   = getCfg().pat;
   document.getElementById('modal-settings').classList.add('open');
 }
 function closeSettings() {
   document.getElementById('modal-settings').classList.remove('open');
 }
 function saveSettings() {
-  localStorage.setItem(CFG.OWNER, document.getElementById('s-owner').value.trim());
-  localStorage.setItem(CFG.REPO,  document.getElementById('s-repo').value.trim());
-  localStorage.setItem(CFG.PAT,   document.getElementById('s-pat').value.trim());
+  localStorage.setItem('fz_gh_pat', document.getElementById('s-pat').value.trim());
   closeSettings();
   loadData();
 }
@@ -855,17 +842,19 @@ function renderSavedList() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INIT
+// INIT + AUTO-REFRESH
 // ─────────────────────────────────────────────────────────────────────────────
 (function init() {
   document.getElementById('qtoday').value = new Date().toISOString().slice(0,10);
   updateWriteBadge();
-  const { owner, repo } = getCfg();
-  if (owner && repo) {
+  loadData();
+
+  // Auto-Refresh alle 5 Minuten (für Notion-Embed)
+  setInterval(() => {
     loadData();
-  } else {
-    openSettings();
-  }
+    // Heute-Datum aktualisieren falls Mitternacht überschritten
+    document.getElementById('qtoday').value = new Date().toISOString().slice(0,10);
+  }, 5 * 60 * 1000);
 })();
 </script>
 </body>
