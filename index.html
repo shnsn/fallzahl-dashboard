@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fallzahl-Prediktion</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --berry:       #924E7D;
+    --berry-mid:   #A86098;
+    --berry-light: #C08AB4;
+    --rosa:        #F3E8F0;
+    --rosa-mid:    #E4C8DA;
+    --bg:          #ffffff;
+    --card:        #ffffff;
+    --border:      #E8D5E3;
+    --text:        #1f0e1b;
+    --muted:       #7a5070;
+    --success:     #2e7d32;
+    --success-bg:  #e8f5e9;
+    --warn:        #c62828;
+    --warn-bg:     #ffebee;
+    --neutral-bg:  #ede7f6;
+    --neutral:     #512da8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: linear-gradient(135deg, var(--berry) 0%, var(--berry-mid) 100%);
+    color: white;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  header p  { font-size: 11px; opacity: 0.85; margin-top: 1px; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+  .btn-icon {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    border-radius: 7px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .btn-icon:hover { background: rgba(255,255,255,0.28); }
+
+  /* ── STATUS BAR ── */
+  #status-bar {
+    padding: 6px 20px;
+    font-size: 12px;
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  #status-bar.ok   { background: var(--success-bg); color: var(--success); display: flex; }
+  #status-bar.err  { background: var(--warn-bg);    color: var(--warn);    display: flex; }
+  #status-bar.info { background: var(--neutral-bg); color: var(--neutral); display: flex; }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 14px;
+    padding: 14px;
+    align-items: start;
+  }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .card:last-child { margin-bottom: 0; }
+  .card-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--berry);
+    margin-bottom: 11px;
+  }
+
+  /* ── FORM ── */
+  .field-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .field-row-4 { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 26px; gap: 6px; margin-bottom: 6px; align-items: center; }
+  label { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+  input[type=text], input[type=number], input[type=date], input[type=password] {
+    width: 100%;
+    padding: 7px 9px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    transition: border-color 0.15s;
+    -moz-appearance: textfield;
+  }
+  input:focus { outline: none; border-color: var(--berry-mid); box-shadow: 0 0 0 2px rgba(146,78,125,0.12); }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  /* ── BUTTONS ── */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary   { background: var(--berry); color: white; width: 100%; padding: 9px; font-size: 13px; border-radius: 9px; margin-top: 8px; }
+  .btn-primary:hover { background: var(--berry-mid); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: var(--rosa); color: var(--berry); border: 1px solid var(--rosa-mid); font-size: 12px; padding: 6px 12px; }
+  .btn-secondary:hover { background: var(--rosa-mid); }
+  .btn-ghost  { background: transparent; color: var(--muted); padding: 4px 6px; border-radius: 5px; cursor: pointer; border: none; }
+  .btn-ghost:hover { background: var(--border); }
+  .btn-add    { background: var(--rosa); color: var(--berry); border: 1px dashed var(--berry-light); width: 100%; padding: 7px; border-radius: 8px; margin-top: 4px; font-size: 12px; cursor: pointer; }
+  .btn-add:hover { background: var(--rosa-mid); }
+
+  .tbl-header {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 26px;
+    gap: 6px; padding: 0 0 4px 0;
+    border-bottom: 1px solid var(--border); margin-bottom: 6px;
+  }
+  .tbl-header span { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── PREDICTION BOX ── */
+  .pred-box {
+    background: linear-gradient(135deg, var(--rosa) 0%, #faf4f8 100%);
+    border: 1px solid var(--rosa-mid);
+    border-radius: 11px;
+    padding: 13px 15px;
+    margin-top: 10px;
+  }
+  .pred-value { font-size: 30px; font-weight: 800; color: var(--berry); letter-spacing: -1px; line-height: 1; }
+  .pred-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pred-ci    { font-size: 12px; color: var(--muted); margin-top: 6px; border-top: 1px solid var(--rosa-mid); padding-top: 6px; }
+  .pred-ci strong { color: var(--berry); }
+
+  /* ── STATUS BADGE ── */
+  .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-top: 8px; }
+  .status-above { background: var(--success-bg); color: var(--success); }
+  .status-below { background: var(--warn-bg); color: var(--warn); }
+  .status-on    { background: var(--neutral-bg); color: var(--neutral); }
+
+  /* ── CHART ── */
+  .chart-wrap { position: relative; height: 340px; }
+
+  /* ── SAVED LIST ── */
+  .saved-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); margin-bottom: 5px; font-size: 12px; }
+  .saved-dot  { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0; }
+  .saved-num  { font-weight: 700; color: var(--berry); }
+
+  /* ── EMPTY ── */
+  .empty { text-align: center; padding: 16px 10px; color: var(--muted); font-size: 12px; border: 1px dashed var(--border); border-radius: 8px; }
+
+  /* ── SETTINGS MODAL ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: white; border-radius: 14px;
+    padding: 22px 24px; max-width: 440px; width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+  .modal h2 { font-size: 16px; font-weight: 700; color: var(--berry); margin-bottom: 14px; }
+  .modal .note { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+  .modal .field { margin-bottom: 10px; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  .note { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+  .alpha-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .dot-berry   { width:8px; height:8px; border-radius:50%; background:var(--berry); display:inline-block; }
+
+  /* ── SPINNER ── */
+  .spin { display: inline-block; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── READONLY INDICATOR ── */
+  .readonly-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--neutral-bg); color: var(--neutral);
+    padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── SETTINGS MODAL ── -->
+<div class="modal-overlay" id="modal-settings">
+  <div class="modal">
+    <h2>⚙️ GitHub Einstellungen</h2>
+    <div class="field">
+      <label>GitHub Benutzername / Organisation</label>
+      <input type="text" id="s-owner" placeholder="z.B. meinpraxis">
+    </div>
+    <div class="field">
+      <label>Repository Name</label>
+      <input type="text" id="s-repo" placeholder="z.B. fallzahl-dashboard">
+    </div>
+    <div class="field">
+      <label>Personal Access Token (PAT) — nur auf Praxis-Geräten eingeben</label>
+      <input type="password" id="s-pat" placeholder="ghp_...">
+      <p class="note">
+        Token wird nur in deinem Browser gespeichert (localStorage) — nie auf GitHub oder Notion sichtbar.<br>
+        Benötigt Scope: <strong>repo</strong> (für private Repos) oder <strong>public_repo</strong>.<br>
+        Ohne Token: nur Lesezugriff.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeSettings()">Abbrechen</button>
+      <button class="btn btn-primary" style="width:auto;margin-top:0" onclick="saveSettings()">Speichern &amp; laden</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── HEADER ── -->
+<header>
+  <div>
+    <h1>📈 Fallzahl-Prediktion</h1>
+    <p id="repo-hint">Quartalsprognose · Daten auf GitHub</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn-icon" onclick="loadData()" title="Neu laden">🔄 Reload</button>
+    <button class="btn-icon" onclick="openSettings()">⚙️ GitHub</button>
+  </div>
+</header>
+
+<div id="status-bar"></div>
+
+<div class="layout">
+
+  <!-- ── LEFT ── -->
+  <div>
+
+    <!-- Historische Quartale -->
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        Historische Quartale
+        <span id="write-badge"></span>
+      </div>
+      <div class="tbl-header">
+        <span>Quartal</span><span>M1</span><span>M2</span><span>M3</span><span></span>
+      </div>
+      <div id="hist-rows"></div>
+      <button class="btn btn-add" onclick="addHistRow()">+ Quartal hinzufügen</button>
+      <p class="note" style="margin-top:6px">Kumulative Fallzahlen am Ende jedes Monats im Quartal.</p>
+    </div>
+
+    <!-- Aktuelles Quartal -->
+    <div class="card">
+      <div class="card-title">Aktuelles Quartal</div>
+      <div class="field-row">
+        <div>
+          <label>Quartal-Start</label>
+          <input type="date" id="qstart" oninput="updateAll()">
+        </div>
+        <div>
+          <label>Heute / Stichtag</label>
+          <input type="date" id="qtoday" oninput="updateAll()">
+        </div>
+      </div>
+      <div>
+        <label>Aktuelle Fallzahl</label>
+        <input type="number" id="qcases" placeholder="z. B. 1250" oninput="updateAll()">
+      </div>
+
+      <button class="btn btn-primary" id="btn-save-pred" onclick="savePrediction()">
+        💾 Vorhersage speichern &amp; auf GitHub sichern
+      </button>
+      <p class="note">Gespeicherte Vorhersagen bleiben erhalten und werden im Verlaufsgraph angezeigt.</p>
+
+      <div id="pred-summary"></div>
+    </div>
+
+    <!-- Modell-Info -->
+    <div class="card" id="model-info" style="display:none">
+      <div class="card-title">Modell</div>
+      <div id="model-detail"></div>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT ── -->
+  <div>
+
+    <div class="card" style="padding:14px 14px 10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin-bottom:0">Fallzahlverlauf &amp; Prognose</div>
+        <div id="legend" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+      </div>
+      <div class="chart-wrap"><canvas id="myChart"></canvas></div>
+      <div style="font-size:11px;color:var(--muted);text-align:right;margin-top:4px">
+        X-Achse: Tag im Quartal · Y-Achse: kumulative Fälle
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin-bottom:0">Gespeicherte Vorhersagen</div>
+        <button class="btn btn-ghost" style="font-size:11px" onclick="clearPredictions()">Alle löschen</button>
+      </div>
+      <div id="saved-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG (stored in localStorage — device only)
+// ─────────────────────────────────────────────────────────────────────────────
+const CFG = {
+  OWNER: 'fz_gh_owner',
+  REPO:  'fz_gh_repo',
+  PAT:   'fz_gh_pat',
+};
+function getCfg() {
+  return {
+    owner: localStorage.getItem(CFG.OWNER) || '',
+    repo:  localStorage.getItem(CFG.REPO)  || '',
+    pat:   localStorage.getItem(CFG.PAT)   || '',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE (loaded from GitHub)
+// ─────────────────────────────────────────────────────────────────────────────
+let historical  = [];
+let predictions = [];
+let dataSha     = null; // SHA of data.json on GitHub (needed for update)
+let chart       = null;
+let canWrite    = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GITHUB API
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadData() {
+  const { owner, repo, pat } = getCfg();
+  if (!owner || !repo) {
+    openSettings();
+    return;
+  }
+
+  showStatus('info', '⏳ Lade Daten von GitHub…');
+
+  try {
+    // Use API endpoint (works for public repos without auth, and with auth for private)
+    const headers = { 'Accept': 'application/vnd.github+json' };
+    if (pat) headers['Authorization'] = `Bearer ${pat}`;
+
+    const resp = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/data.json`,
+      { headers, cache: 'no-store' }
+    );
+
+    if (resp.status === 404) {
+      showStatus('err', '❌ data.json nicht gefunden — bitte ins Repo hochladen.');
+      return;
+    }
+    if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
+
+    const json = await resp.json();
+    dataSha = json.sha;
+    const raw = JSON.parse(atob(json.content.replace(/\n/g, '')));
+
+    historical  = raw.historical  || [];
+    predictions = raw.predictions || [];
+
+    if (raw.qstart) document.getElementById('qstart').value = raw.qstart;
+
+    canWrite = !!pat;
+    updateWriteBadge();
+    showStatus('ok', `✓ Daten geladen · ${owner}/${repo}`);
+    document.getElementById('repo-hint').textContent = `${owner}/${repo} · zuletzt geladen: ${new Date().toLocaleTimeString('de')}`;
+
+    setTimeout(() => hideStatus(), 3000);
+    updateAll();
+
+  } catch (e) {
+    showStatus('err', `❌ Fehler beim Laden: ${e.message}`);
+  }
+}
+
+async function saveToGitHub() {
+  const { owner, repo, pat } = getCfg();
+  if (!pat) {
+    showStatus('err', '❌ Kein GitHub Token — bitte in Einstellungen eingeben.');
+    return false;
+  }
+
+  const data = {
+    historical,
+    predictions,
+    qstart: document.getElementById('qstart').value,
+  };
+
+  try {
+    const body = {
+      message: `Fallzahlen Update ${new Date().toISOString().slice(0,10)}`,
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
+    };
+    if (dataSha) body.sha = dataSha;
+
+    const resp = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/data.json`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${pat}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.message || resp.status);
+    }
+
+    const result = await resp.json();
+    dataSha = result.content.sha;
+    showStatus('ok', '✓ Auf GitHub gespeichert');
+    setTimeout(() => hideStatus(), 3000);
+    return true;
+
+  } catch (e) {
+    showStatus('err', `❌ Speichern fehlgeschlagen: ${e.message}`);
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+function openSettings() {
+  const { owner, repo, pat } = getCfg();
+  document.getElementById('s-owner').value = owner;
+  document.getElementById('s-repo').value  = repo;
+  document.getElementById('s-pat').value   = pat;
+  document.getElementById('modal-settings').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('modal-settings').classList.remove('open');
+}
+function saveSettings() {
+  localStorage.setItem(CFG.OWNER, document.getElementById('s-owner').value.trim());
+  localStorage.setItem(CFG.REPO,  document.getElementById('s-repo').value.trim());
+  localStorage.setItem(CFG.PAT,   document.getElementById('s-pat').value.trim());
+  closeSettings();
+  loadData();
+}
+
+function updateWriteBadge() {
+  const badge = document.getElementById('write-badge');
+  const btnSave = document.getElementById('btn-save-pred');
+  if (canWrite) {
+    badge.innerHTML = '';
+    btnSave.disabled = false;
+  } else {
+    badge.innerHTML = '<span class="readonly-badge">👁 Nur-Lesen</span>';
+    btnSave.disabled = true;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATUS BAR
+// ─────────────────────────────────────────────────────────────────────────────
+function showStatus(type, msg) {
+  const bar = document.getElementById('status-bar');
+  bar.className = type;
+  bar.textContent = msg;
+}
+function hideStatus() {
+  const bar = document.getElementById('status-bar');
+  bar.className = '';
+  bar.style.display = 'none';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HISTORICAL ROWS
+// ─────────────────────────────────────────────────────────────────────────────
+const HIST_COLORS = [
+  'rgba(190,190,210,0.7)', 'rgba(160,180,200,0.7)',
+  'rgba(180,160,200,0.7)', 'rgba(200,170,180,0.7)',
+  'rgba(150,170,190,0.7)', 'rgba(180,190,160,0.7)',
+];
+
+function renderHistRows() {
+  const container = document.getElementById('hist-rows');
+  container.innerHTML = '';
+  if (historical.length === 0) {
+    container.innerHTML = '<div class="empty">Noch keine Quartale.<br>Füge mindestens 2 hinzu.</div>';
+    return;
+  }
+  historical.forEach((q, i) => {
+    const row = document.createElement('div');
+    row.className = 'field-row-4';
+    const dis = canWrite ? '' : 'disabled';
+    row.innerHTML = `
+      <input type="text" value="${q.label||''}" placeholder="Q1 2025" ${dis}
+        oninput="historical[${i}].label=this.value; renderChart()" style="font-weight:600">
+      <input type="number" value="${q.m1||''}" placeholder="M1" ${dis}
+        oninput="historical[${i}].m1=+this.value; updateAll()">
+      <input type="number" value="${q.m2||''}" placeholder="M2" ${dis}
+        oninput="historical[${i}].m2=+this.value; updateAll()">
+      <input type="number" value="${q.m3||''}" placeholder="M3" ${dis}
+        oninput="historical[${i}].m3=+this.value; updateAll()">
+      <button class="btn btn-ghost" onclick="removeHistRow(${i})" ${dis} title="Löschen">✕</button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function addHistRow() {
+  if (!canWrite) { showStatus('err', '❌ Kein Schreibzugriff — Token in Einstellungen eingeben.'); return; }
+  historical.push({ label: `Q? ${new Date().getFullYear()}`, m1: null, m2: null, m3: null });
+  renderHistRows(); updateAll();
+}
+function removeHistRow(i) {
+  historical.splice(i, 1);
+  renderHistRows(); updateAll();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODEL
+// ─────────────────────────────────────────────────────────────────────────────
+function fitModel(hist) {
+  const valid = hist.filter(q => q.m1 > 0 && q.m2 > 0 && q.m3 > 0);
+  if (valid.length === 0) return null;
+  const alphas = [];
+  for (const q of valid) {
+    const f1 = q.m1 / q.m3, f2 = q.m2 / q.m3;
+    if (f1 > 0 && f1 < 1) alphas.push(Math.log(f1) / Math.log(1/3));
+    if (f2 > 0 && f2 < 1) alphas.push(Math.log(f2) / Math.log(2/3));
+  }
+  if (!alphas.length) return null;
+  const alpha = alphas.reduce((a,b)=>a+b,0) / alphas.length;
+
+  const errors = [];
+  for (const q of valid) {
+    errors.push(q.m3 / (q.m1 / Math.pow(1/3, alpha)));
+    errors.push(q.m3 / (q.m2 / Math.pow(2/3, alpha)));
+  }
+  const meanErr = errors.reduce((a,b)=>a+b,0) / errors.length;
+  const stdErr  = Math.sqrt(errors.reduce((a,b)=>a+(b-meanErr)**2,0) / errors.length);
+  return { alpha, meanErr, stdErr: Math.max(stdErr, 0.04), valid };
+}
+
+function growthFrac(day, alpha, T) {
+  if (day <= 0) return 0;
+  if (day >= T) return 1;
+  return Math.pow(day / T, alpha);
+}
+function quarterEnd(s) {
+  const d = new Date(s); d.setMonth(d.getMonth() + 3); return d;
+}
+function totalQDays(s) { return (quarterEnd(s) - new Date(s)) / 86400000; }
+function dayOfQ(s, c)  { return Math.max(0, (new Date(c) - new Date(s)) / 86400000); }
+
+function computePrediction() {
+  const qstart  = document.getElementById('qstart').value;
+  const qtoday  = document.getElementById('qtoday').value;
+  const qcasesV = document.getElementById('qcases').value;
+  if (!qstart || !qtoday || !qcasesV) return null;
+  const qcases = parseFloat(qcasesV);
+  if (isNaN(qcases) || qcases <= 0) return null;
+  const model = fitModel(historical);
+  if (!model) return null;
+  const T   = totalQDays(qstart);
+  const day = dayOfQ(qstart, qtoday);
+  if (day <= 0) return null;
+  const f   = growthFrac(day, model.alpha, T);
+  if (f <= 0) return null;
+  const predicted = qcases / f;
+  return {
+    predicted,
+    ciLow:  predicted * (model.meanErr - 1.65 * model.stdErr),
+    ciHigh: predicted * (model.meanErr + 1.65 * model.stdErr),
+    day, T, f, model, qcases, qstart, qtoday
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI
+// ─────────────────────────────────────────────────────────────────────────────
+function updateAll() {
+  renderHistRows();
+  renderPredSummary();
+  renderChart();
+  renderSavedList();
+  renderModelInfo();
+}
+
+function renderPredSummary() {
+  const container = document.getElementById('pred-summary');
+  const pred = computePrediction();
+  if (!pred) { container.innerHTML = ''; return; }
+
+  const pct = pred.day / pred.T;
+  const expected = pred.predicted * pred.f * pred.model.meanErr;
+  const delta    = pred.qcases - expected;
+  const deltaPct = (delta / expected * 100).toFixed(1);
+  const absDelta = Math.abs(parseFloat(deltaPct));
+
+  let statusHtml = '';
+  if (absDelta < 3) {
+    statusHtml = `<span class="status-badge status-on">≈ Im Zielkorridor</span>`;
+  } else if (delta > 0) {
+    statusHtml = `<span class="status-badge status-above">▲ +${deltaPct}% über Prognose</span>`;
+  } else {
+    statusHtml = `<span class="status-badge status-below">▼ ${deltaPct}% unter Prognose</span>`;
+  }
+
+  container.innerHTML = `
+    <div class="pred-box">
+      <div class="pred-label">Vorhergesagte Quartalsfälle</div>
+      <div class="pred-value">${Math.round(pred.predicted).toLocaleString('de')}</div>
+      <div class="pred-ci">
+        90%-KI: <strong>${Math.round(pred.ciLow).toLocaleString('de')}</strong>
+        – <strong>${Math.round(pred.ciHigh).toLocaleString('de')}</strong>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">
+        Tag ${Math.round(pred.day)} von ${Math.round(pred.T)} · ${(pct*100).toFixed(0)}% des Quartals
+      </div>
+      ${statusHtml}
+    </div>`;
+}
+
+function renderModelInfo() {
+  const model = fitModel(historical);
+  const box = document.getElementById('model-info');
+  if (!model) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  document.getElementById('model-detail').innerHTML = `
+    <div class="alpha-badge"><span class="dot-berry"></span>
+      Wachstumsexponent α = <strong>${model.alpha.toFixed(3)}</strong>
+      &nbsp;(α&lt;1: konkav = schneller Start)
+    </div>
+    <div style="margin-top:5px;font-size:12px;color:var(--muted)">
+      ${model.valid.length} historische Quartal${model.valid.length!==1?'e':''}
+      · Streuung ±${(model.stdErr*100).toFixed(1)}%
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHART
+// ─────────────────────────────────────────────────────────────────────────────
+function buildDatasets() {
+  const qstart  = document.getElementById('qstart').value;
+  const qtoday  = document.getElementById('qtoday').value;
+  const qcasesV = document.getElementById('qcases').value;
+  const model   = fitModel(historical);
+  const datasets = [];
+
+  // Historical lines
+  historical.forEach((q, i) => {
+    if (!q.m1 || !q.m2 || !q.m3) return;
+    const pts = [];
+    for (let d = 0; d <= 90; d++) {
+      let v = d === 0 ? 0
+            : d <= 30 ? (q.m1/30)*d
+            : d <= 60 ? q.m1 + ((q.m2-q.m1)/30)*(d-30)
+                      : q.m2 + ((q.m3-q.m2)/30)*(d-60);
+      pts.push({ x: d, y: Math.round(v) });
+    }
+    datasets.push({ label: q.label, data: pts, borderColor: HIST_COLORS[i%HIST_COLORS.length], backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3, borderDash: [4,3], order: 10+i });
+  });
+
+  if (model && qstart) {
+    const T    = totalQDays(qstart);
+    const pred = computePrediction();
+    if (pred) {
+      const F = pred.predicted, Fl = pred.ciLow, Fh = pred.ciHigh;
+      const ciUpper = [], ciLower = [], predLine = [];
+      for (let d = 0; d <= T; d++) {
+        const f = growthFrac(d, model.alpha, T);
+        ciUpper.push({ x: d, y: Fh * f });
+        ciLower.push({ x: d, y: Fl * f });
+        predLine.push({ x: d, y: F  * f });
+      }
+      datasets.push({ label: 'KI 90%',   data: ciUpper, borderColor: 'transparent', backgroundColor: 'rgba(146,78,125,0.12)', fill: '+1', pointRadius: 0, order: 3, tension: 0.3 });
+      datasets.push({ label: '_ci_lower', data: ciLower, borderColor: 'rgba(146,78,125,0.30)', backgroundColor: 'transparent', fill: false, pointRadius: 0, borderWidth: 1, borderDash: [3,3], order: 3, tension: 0.3 });
+      datasets.push({ label: 'Prognose',  data: predLine, borderColor: 'var(--berry)', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.3, order: 2 });
+    }
+
+    // Saved trajectories + dots
+    predictions.filter(p => p.qstart === qstart).forEach(p => {
+      const line = [];
+      for (let d = 0; d <= T; d++) line.push({ x: d, y: p.predicted * growthFrac(d, model.alpha, T) });
+      datasets.push({ label: `Vorhersage ${p.date}`, data: line, borderColor: 'rgba(192,138,180,0.55)', backgroundColor: 'transparent', borderWidth: 1.2, borderDash: [6,4], pointRadius: 0, tension: 0.3, order: 4 });
+    });
+
+    const savedPts = predictions.filter(p => p.qstart === qstart).map(p => ({ x: p.day, y: p.cases }));
+    if (savedPts.length) datasets.push({ label: 'Ist-Werte', data: savedPts, borderColor: 'var(--berry)', backgroundColor: 'var(--berry-light)', borderWidth: 2, pointRadius: 6, showLine: false, order: 1 });
+
+    if (qtoday && qcasesV) {
+      const day = dayOfQ(qstart, qtoday), cases = parseFloat(qcasesV);
+      if (day >= 0 && !isNaN(cases)) datasets.push({ label: 'Aktuell', data: [{ x: day, y: cases }], borderColor: '#924E7D', backgroundColor: '#A86098', borderWidth: 2.5, pointRadius: 9, showLine: false, order: 0 });
+    }
+  }
+  return datasets;
+}
+
+function renderChart() {
+  const canvas   = document.getElementById('myChart');
+  const datasets = buildDatasets();
+  const qstart   = document.getElementById('qstart').value;
+  const xMax     = qstart ? Math.ceil(totalQDays(qstart)) : 90;
+
+  const cfg = {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 180 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: ctx => `Tag ${Math.round(ctx[0].parsed.x)}`,
+            label: ctx => ctx.dataset.label?.startsWith('_') ? null : `${ctx.dataset.label}: ${Math.round(ctx.parsed.y).toLocaleString('de')}`,
+          },
+          filter: item => !item.dataset.label?.startsWith('_'),
+        }
+      },
+      scales: {
+        x: { type: 'linear', min: 0, max: xMax, title: { display: true, text: 'Tag im Quartal', color: 'var(--muted)', font:{size:11} }, ticks: { stepSize: 10, color: 'var(--muted)', font:{size:10}, callback: v => `T${v}` }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        y: { title: { display: true, text: 'Kumulative Fälle', color: 'var(--muted)', font:{size:11} }, ticks: { color: 'var(--muted)', font:{size:10}, callback: v => v>=1000?(v/1000).toFixed(1)+'k':v }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true },
+      }
+    }
+  };
+
+  if (chart) { chart.data.datasets = datasets; chart.options.scales.x.max = xMax; chart.update(); }
+  else       { chart = new Chart(canvas, cfg); }
+
+  // Legend
+  const leg = document.getElementById('legend');
+  leg.innerHTML = '';
+  datasets.filter(d => d.label && !d.label.startsWith('_') && !d.label.startsWith('Vorhersage '))
+    .slice(0, 5)
+    .forEach(d => {
+      const el = document.createElement('div');
+      el.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)';
+      el.innerHTML = `<span style="width:14px;height:3px;border-radius:2px;background:${d.borderColor||d.backgroundColor||'#ccc'};display:inline-block"></span>${d.label}`;
+      leg.appendChild(el);
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SAVE PREDICTION
+// ─────────────────────────────────────────────────────────────────────────────
+async function savePrediction() {
+  if (!canWrite) return;
+  const pred = computePrediction();
+  if (!pred) { showStatus('err', '❌ Quartalstart, Datum und Fallzahl eingeben.'); return; }
+
+  const btn = document.getElementById('btn-save-pred');
+  btn.innerHTML = '<span class="spin">⏳</span> Speichert…';
+  btn.disabled  = true;
+
+  predictions.push({
+    id: Date.now(),
+    date: pred.qtoday,
+    qstart: pred.qstart,
+    day: Math.round(pred.day),
+    cases: pred.qcases,
+    predicted: Math.round(pred.predicted),
+    ciLow:     Math.round(pred.ciLow),
+    ciHigh:    Math.round(pred.ciHigh),
+  });
+
+  const ok = await saveToGitHub();
+  btn.innerHTML = ok ? '✓ Gespeichert!' : '❌ Fehler';
+  btn.style.background = ok ? 'var(--success)' : 'var(--warn)';
+  setTimeout(() => { btn.innerHTML = '💾 Vorhersage speichern & auf GitHub sichern'; btn.style.background = ''; btn.disabled = false; }, 2000);
+
+  if (ok) { renderSavedList(); renderChart(); }
+  else     { predictions.pop(); } // rollback
+}
+
+async function clearPredictions() {
+  if (!confirm('Alle gespeicherten Vorhersagen löschen?')) return;
+  predictions = [];
+  await saveToGitHub();
+  renderSavedList(); renderChart();
+}
+
+async function deletePrediction(id) {
+  predictions = predictions.filter(p => p.id !== id);
+  await saveToGitHub();
+  renderSavedList(); renderChart();
+}
+
+function renderSavedList() {
+  const container = document.getElementById('saved-list');
+  const qstart    = document.getElementById('qstart').value;
+  const relevant  = predictions.filter(p => p.qstart === qstart);
+
+  if (relevant.length === 0) {
+    container.innerHTML = `<div class="empty">Noch keine Vorhersagen gespeichert.</div>`;
+    return;
+  }
+
+  container.innerHTML = relevant.map(p => {
+    const qtoday  = document.getElementById('qtoday').value;
+    const qcasesV = document.getElementById('qcases').value;
+    let statusHtml = '';
+    if (qtoday && qcasesV && qstart) {
+      const model = fitModel(historical);
+      if (model) {
+        const T = totalQDays(qstart);
+        const f = growthFrac(dayOfQ(qstart, qtoday), model.alpha, T);
+        const expected = p.predicted * f;
+        const delta = ((parseFloat(qcasesV) - expected) / expected * 100).toFixed(1);
+        statusHtml = Math.abs(parseFloat(delta)) < 3
+          ? `<span style="font-size:11px;color:var(--neutral)">≈ im Korridor</span>`
+          : parseFloat(delta) > 0
+            ? `<span style="font-size:11px;color:var(--success)">▲ +${delta}%</span>`
+            : `<span style="font-size:11px;color:var(--warn)">▼ ${delta}%</span>`;
+      }
+    }
+    return `
+      <div class="saved-item">
+        <div style="display:flex;align-items:center;gap:4px">
+          <span class="saved-dot" style="background:var(--berry-light)"></span>
+          <span style="color:var(--muted)">${p.date} · T${p.day}</span>
+        </div>
+        ${statusHtml}
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="saved-num">${p.predicted.toLocaleString('de')}</span>
+          <span style="font-size:10px;color:var(--muted)">[${p.ciLow.toLocaleString('de')}–${p.ciHigh.toLocaleString('de')}]</span>
+          ${canWrite ? `<button class="btn btn-ghost" style="font-size:10px;padding:2px 5px" onclick="deletePrediction(${p.id})">✕</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────────
+(function init() {
+  document.getElementById('qtoday').value = new Date().toISOString().slice(0,10);
+  updateWriteBadge();
+  const { owner, repo } = getCfg();
+  if (owner && repo) {
+    loadData();
+  } else {
+    openSettings();
+  }
+})();
+</script>
+</body>
+</html>
