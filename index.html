@@ -3,859 +3,658 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fallzahl-Prediktion</title>
+<title>Fallzahl-Prediktion · Gemeinschaftspraxis</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
 <style>
   :root {
     color-scheme: light;
-    --berry:       #924E7D;
-    --berry-mid:   #A86098;
-    --berry-light: #C08AB4;
-    --rosa:        #F3E8F0;
-    --rosa-mid:    #E4C8DA;
-    --bg:          #ffffff;
-    --card:        #ffffff;
-    --border:      #E8D5E3;
-    --text:        #1f0e1b;
-    --muted:       #7a5070;
-    --success:     #2e7d32;
-    --success-bg:  #e8f5e9;
-    --warn:        #c62828;
-    --warn-bg:     #ffebee;
-    --neutral-bg:  #ede7f6;
-    --neutral:     #512da8;
+    --berry:    #924E7D; --berry-mid: #A86098; --berry-lt: #C08AB4;
+    --rosa:     #F3E8F0; --rosa-mid:  #E4C8DA;
+    --bg:       #ffffff; --card: #ffffff; --border: #E8D5E3;
+    --text:     #1f0e1b; --muted: #7a5070;
+    --ok:       #2e7d32; --ok-bg: #e8f5e9;
+    --warn:     #c62828; --warn-bg: #ffebee;
+    --neu:      #512da8; --neu-bg: #ede7f6;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 14px;
-    line-height: 1.5;
-  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+         background:var(--bg); color:var(--text); font-size:13px; line-height:1.5; }
 
-  /* ── HEADER ── */
-  header {
-    background: linear-gradient(135deg, var(--berry) 0%, var(--berry-mid) 100%);
-    color: white;
-    padding: 14px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-  header p  { font-size: 11px; opacity: 0.85; margin-top: 1px; }
-  .header-actions { display: flex; gap: 8px; align-items: center; }
-  .btn-icon {
-    background: rgba(255,255,255,0.18);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: white;
-    border-radius: 7px;
-    padding: 5px 10px;
-    font-size: 12px;
-    cursor: pointer;
-    display: flex; align-items: center; gap: 4px;
-  }
-  .btn-icon:hover { background: rgba(255,255,255,0.28); }
+  /* HEADER */
+  header { background:linear-gradient(135deg,var(--berry) 0%,var(--berry-mid) 100%);
+           color:white; padding:11px 16px;
+           display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:16px; font-weight:700; }
+  header p  { font-size:10px; opacity:.8; margin-top:1px; }
+  .hbtn { background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3);
+          color:white; border-radius:7px; padding:5px 10px; font-size:12px;
+          cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+  .hbtn:hover { background:rgba(255,255,255,.28); }
+  .header-btns { display:flex; gap:6px; }
 
-  /* ── STATUS BAR ── */
-  #status-bar {
-    padding: 6px 20px;
-    font-size: 12px;
-    display: none;
-    align-items: center;
-    gap: 6px;
-  }
-  #status-bar.ok   { background: var(--success-bg); color: var(--success); display: flex; }
-  #status-bar.err  { background: var(--warn-bg);    color: var(--warn);    display: flex; }
-  #status-bar.info { background: var(--neutral-bg); color: var(--neutral); display: flex; }
+  /* STATUS */
+  #sbar { padding:5px 16px; font-size:12px; display:none; align-items:center; gap:5px; }
+  #sbar.ok  { background:var(--ok-bg);   color:var(--ok);   display:flex; }
+  #sbar.err { background:var(--warn-bg); color:var(--warn); display:flex; }
+  #sbar.inf { background:var(--neu-bg);  color:var(--neu);  display:flex; }
 
-  /* ── LAYOUT ── */
-  .layout {
-    display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 14px;
-    padding: 14px;
-    align-items: start;
-  }
-  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+  /* LAYOUT */
+  .layout { display:grid; grid-template-columns:260px 1fr; gap:12px; padding:12px; }
+  @media (max-width:720px) { .layout { grid-template-columns:1fr; } }
 
-  /* ── CARDS ── */
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 12px;
-  }
-  .card:last-child { margin-bottom: 0; }
-  .card-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--berry);
-    margin-bottom: 11px;
-  }
+  /* CARDS */
+  .card { background:var(--card); border:1px solid var(--border);
+          border-radius:11px; padding:13px; margin-bottom:11px; }
+  .card:last-child { margin-bottom:0; }
+  .ctitle { font-size:10px; font-weight:700; text-transform:uppercase;
+            letter-spacing:.8px; color:var(--berry); margin-bottom:9px; }
 
-  /* ── FORM ── */
-  .field-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  .field-row-4 { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 26px; gap: 6px; margin-bottom: 6px; align-items: center; }
-  label { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
-  input[type=text], input[type=number], input[type=date], input[type=password] {
-    width: 100%;
-    padding: 7px 9px;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    font-size: 13px;
-    background: var(--bg);
-    color: var(--text);
-    transition: border-color 0.15s;
-    -moz-appearance: textfield;
-  }
-  input:focus { outline: none; border-color: var(--berry-mid); box-shadow: 0 0 0 2px rgba(146,78,125,0.12); }
-  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  /* HISTORICAL TABLE */
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { font-size:10px; color:var(--muted); font-weight:700; text-transform:uppercase;
+       letter-spacing:.5px; padding:3px 5px 5px; border-bottom:1px solid var(--border);
+       text-align:right; }
+  th:first-child { text-align:left; }
+  td { padding:5px 5px; text-align:right; border-bottom:1px solid var(--rosa); }
+  td:first-child { text-align:left; font-weight:600; color:var(--berry); }
+  tr:last-child td { border-bottom:none; }
 
-  /* ── BUTTONS ── */
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
-  .btn-primary   { background: var(--berry); color: white; width: 100%; padding: 9px; font-size: 13px; border-radius: 9px; margin-top: 8px; }
-  .btn-primary:hover { background: var(--berry-mid); }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-secondary { background: var(--rosa); color: var(--berry); border: 1px solid var(--rosa-mid); font-size: 12px; padding: 6px 12px; }
-  .btn-secondary:hover { background: var(--rosa-mid); }
-  .btn-ghost  { background: transparent; color: var(--muted); padding: 4px 6px; border-radius: 5px; cursor: pointer; border: none; }
-  .btn-ghost:hover { background: var(--border); }
-  .btn-add    { background: var(--rosa); color: var(--berry); border: 1px dashed var(--berry-light); width: 100%; padding: 7px; border-radius: 8px; margin-top: 4px; font-size: 12px; cursor: pointer; }
-  .btn-add:hover { background: var(--rosa-mid); }
+  /* PRED BOX */
+  .pbox { background:linear-gradient(135deg,var(--rosa),#faf4f8);
+          border:1px solid var(--rosa-mid); border-radius:10px; padding:11px 13px; }
+  .pbig  { font-size:26px; font-weight:800; color:var(--berry); letter-spacing:-1px; line-height:1; }
+  .plbl  { font-size:10px; color:var(--muted); margin-top:1px; }
+  .pci   { font-size:11px; color:var(--muted); margin-top:5px;
+           border-top:1px solid var(--rosa-mid); padding-top:5px; }
+  .pci strong { color:var(--berry); }
+  .pmeta { font-size:11px; color:var(--muted); margin-top:3px; }
+  .badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px;
+           border-radius:20px; font-size:11px; font-weight:700; margin-top:6px; }
+  .b-ok   { background:var(--ok-bg);  color:var(--ok); }
+  .b-warn { background:var(--warn-bg);color:var(--warn); }
+  .b-neu  { background:var(--neu-bg); color:var(--neu); }
 
-  .tbl-header {
-    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 26px;
-    gap: 6px; padding: 0 0 4px 0;
-    border-bottom: 1px solid var(--border); margin-bottom: 6px;
-  }
-  .tbl-header span { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  /* CHART */
+  .chart-wrap { position:relative; height:320px; }
 
-  /* ── PREDICTION BOX ── */
-  .pred-box {
-    background: linear-gradient(135deg, var(--rosa) 0%, #faf4f8 100%);
-    border: 1px solid var(--rosa-mid);
-    border-radius: 11px;
-    padding: 13px 15px;
-    margin-top: 10px;
-  }
-  .pred-value { font-size: 30px; font-weight: 800; color: var(--berry); letter-spacing: -1px; line-height: 1; }
-  .pred-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .pred-ci    { font-size: 12px; color: var(--muted); margin-top: 6px; border-top: 1px solid var(--rosa-mid); padding-top: 6px; }
-  .pred-ci strong { color: var(--berry); }
+  /* SNAPSHOTS */
+  .srow { display:flex; align-items:center; justify-content:space-between;
+          padding:6px 9px; border-radius:7px; background:var(--bg);
+          border:1px solid var(--border); margin-bottom:5px; font-size:12px; }
+  .srow:last-child { margin-bottom:0; }
+  .sdot { width:8px; height:8px; border-radius:50%; background:var(--berry-lt);
+          display:inline-block; margin-right:4px; }
+  .snum { font-weight:700; color:var(--berry); }
+  .smeta { color:var(--muted); }
 
-  /* ── STATUS BADGE ── */
-  .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-top: 8px; }
-  .status-above { background: var(--success-bg); color: var(--success); }
-  .status-below { background: var(--warn-bg); color: var(--warn); }
-  .status-on    { background: var(--neutral-bg); color: var(--neutral); }
+  .empty { text-align:center; padding:14px; color:var(--muted); font-size:12px;
+           border:1px dashed var(--border); border-radius:8px; }
 
-  /* ── CHART ── */
-  .chart-wrap { position: relative; height: 340px; }
+  /* MODAL */
+  .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35);
+             z-index:100; align-items:center; justify-content:center; }
+  .overlay.open { display:flex; }
+  .modal { background:#fff; border-radius:13px; padding:20px 22px;
+           max-width:420px; width:92%; box-shadow:0 8px 32px rgba(0,0,0,.18); }
+  .modal h2 { font-size:15px; font-weight:700; color:var(--berry); margin-bottom:13px; }
+  .mfooter { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+  label { display:block; font-size:11px; color:var(--muted); font-weight:600; margin-bottom:3px; }
+  input[type=text],input[type=number],input[type=date],input[type=password] {
+    width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:7px;
+    font-size:13px; background:var(--bg); color:var(--text); margin-bottom:9px;
+    -moz-appearance:textfield; }
+  input:focus { outline:none; border-color:var(--berry-mid);
+                box-shadow:0 0 0 2px rgba(146,78,125,.12); }
+  input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;}
 
-  /* ── SAVED LIST ── */
-  .saved-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); margin-bottom: 5px; font-size: 12px; }
-  .saved-dot  { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0; }
-  .saved-num  { font-weight: 700; color: var(--berry); }
-
-  /* ── EMPTY ── */
-  .empty { text-align: center; padding: 16px 10px; color: var(--muted); font-size: 12px; border: 1px dashed var(--border); border-radius: 8px; }
-
-  /* ── SETTINGS MODAL ── */
-  .modal-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.35); z-index: 100;
-    align-items: center; justify-content: center;
-  }
-  .modal-overlay.open { display: flex; }
-  .modal {
-    background: white; border-radius: 14px;
-    padding: 22px 24px; max-width: 440px; width: 90%;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-  }
-  .modal h2 { font-size: 16px; font-weight: 700; color: var(--berry); margin-bottom: 14px; }
-  .modal .note { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
-  .modal .field { margin-bottom: 10px; }
-  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
-
-  .note { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
-  .alpha-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .dot-berry   { width:8px; height:8px; border-radius:50%; background:var(--berry); display:inline-block; }
-
-  /* ── SPINNER ── */
-  .spin { display: inline-block; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── READONLY INDICATOR ── */
-  .readonly-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: var(--neutral-bg); color: var(--neutral);
-    padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
-  }
+  /* WRITE PANEL */
+  #write-panel { display:none; }
+  #write-panel.visible { display:block; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:5px;
+         padding:8px 13px; border-radius:8px; font-size:13px; font-weight:600;
+         cursor:pointer; border:none; transition:all .15s; }
+  .btn-pri  { background:var(--berry); color:white; width:100%;
+               padding:9px; border-radius:8px; margin-top:4px; }
+  .btn-pri:hover  { background:var(--berry-mid); }
+  .btn-pri:disabled { opacity:.5; cursor:not-allowed; }
+  .btn-sec  { background:var(--rosa); color:var(--berry);
+               border:1px solid var(--rosa-mid); }
+  .btn-sec:hover  { background:var(--rosa-mid); }
+  .btn-ghost { background:transparent; color:var(--muted); padding:4px 7px;
+               border-radius:5px; cursor:pointer; border:none; }
+  .btn-ghost:hover { background:var(--border); }
+  .btn-add  { background:var(--rosa); color:var(--berry);
+               border:1px dashed var(--berry-lt); width:100%; padding:6px;
+               border-radius:7px; margin-top:3px; font-size:12px; cursor:pointer; }
+  .btn-add:hover { background:var(--rosa-mid); }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+  .field-4 { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 24px;
+              gap:5px; margin-bottom:5px; align-items:center; }
+  .th4 { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 24px;
+          gap:5px; padding:0 0 4px; border-bottom:1px solid var(--border);
+          margin-bottom:5px; }
+  .th4 span { font-size:10px; font-weight:700; color:var(--muted);
+               text-transform:uppercase; letter-spacing:.5px; }
+  .note { font-size:11px; color:var(--muted); margin-top:3px; line-height:1.4; }
+  .spin { display:inline-block; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .divider { border:none; border-top:1px solid var(--border); margin:10px 0; }
 </style>
 </head>
 <body>
 
-<!-- ── SETTINGS MODAL ── -->
-<div class="modal-overlay" id="modal-settings">
+<!-- PAT MODAL -->
+<div class="overlay" id="pat-modal">
   <div class="modal">
-    <h2>⚙️ Schreibzugriff einrichten</h2>
-    <div class="field" style="display:flex;gap:8px">
-      <div style="flex:1">
-        <label>Repo</label>
-        <input type="text" id="s-owner" readonly style="background:#f5f5f5;color:#888">
-      </div>
-      <div style="flex:1">
-        <label>Name</label>
-        <input type="text" id="s-repo" readonly style="background:#f5f5f5;color:#888">
-      </div>
-    </div>
-    <div class="field">
-      <label>Personal Access Token (PAT) — nur auf Praxis-Geräten eingeben</label>
-      <input type="password" id="s-pat" placeholder="ghp_...">
-      <p class="note">
-        Nur nötig zum Speichern — Lesen funktioniert ohne Token.<br>
-        Token wird nur in deinem Browser gespeichert, nie hochgeladen.
-      </p>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeSettings()">Abbrechen</button>
-      <button class="btn btn-primary" style="width:auto;margin-top:0" onclick="saveSettings()">Speichern &amp; laden</button>
+    <h2>🔑 Schreibzugriff</h2>
+    <label>GitHub Personal Access Token</label>
+    <input type="password" id="pat-input" placeholder="github_pat_...">
+    <p class="note">Wird nur in diesem Browser gespeichert. Ohne Token: nur Lesezugriff.</p>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closePat()">Abbrechen</button>
+      <button class="btn btn-pri" style="width:auto;margin-top:0" onclick="savePat()">Speichern</button>
     </div>
   </div>
 </div>
 
-<!-- ── HEADER ── -->
+<!-- HEADER -->
 <header>
   <div>
     <h1>📈 Fallzahl-Prediktion</h1>
-    <p id="repo-hint">Quartalsprognose · Daten auf GitHub</p>
+    <p id="last-upd">Lade Daten…</p>
   </div>
-  <div class="header-actions">
-    <button class="btn-icon" onclick="loadData()" title="Neu laden">🔄 Reload</button>
-    <button class="btn-icon" onclick="openSettings()">⚙️ GitHub</button>
+  <div class="header-btns">
+    <button class="hbtn" onclick="loadData()">🔄</button>
+    <button class="hbtn" id="admin-btn" onclick="toggleAdmin()">✏️</button>
   </div>
 </header>
 
-<div id="status-bar"></div>
+<div id="sbar"></div>
 
 <div class="layout">
 
-  <!-- ── LEFT ── -->
+  <!-- LEFT -->
   <div>
 
-    <!-- Historische Quartale -->
-    <div class="card">
-      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-        Historische Quartale
-        <span id="write-badge"></span>
+    <!-- Read-only: Historische Quartale -->
+    <div class="card" id="hist-view-card">
+      <div class="ctitle">Historische Quartale</div>
+      <table><thead><tr><th>Quartal</th><th>M1</th><th>M2</th><th>M3</th></tr></thead>
+        <tbody id="hist-tbody"></tbody></table>
+    </div>
+
+    <!-- Write: Historische Quartale bearbeiten -->
+    <div class="card" id="write-panel">
+      <div class="ctitle" style="display:flex;justify-content:space-between">
+        Quartale bearbeiten
+        <span id="write-mode-badge" style="font-size:10px;background:var(--ok-bg);color:var(--ok);padding:2px 7px;border-radius:10px">✓ Schreibzugriff</span>
       </div>
-      <div class="tbl-header">
+      <div class="th4">
         <span>Quartal</span><span>M1</span><span>M2</span><span>M3</span><span></span>
       </div>
-      <div id="hist-rows"></div>
-      <button class="btn btn-add" onclick="addHistRow()">+ Quartal hinzufügen</button>
-      <p class="note" style="margin-top:6px">Kumulative Fallzahlen am Ende jedes Monats im Quartal.</p>
-    </div>
-
-    <!-- Aktuelles Quartal -->
-    <div class="card">
-      <div class="card-title">Aktuelles Quartal</div>
-      <div class="field-row">
-        <div>
-          <label>Quartal-Start</label>
-          <input type="date" id="qstart" oninput="updateAll()">
-        </div>
-        <div>
-          <label>Heute / Stichtag</label>
-          <input type="date" id="qtoday" oninput="updateAll()">
-        </div>
+      <div id="edit-rows"></div>
+      <button class="btn btn-add" onclick="addRow()">+ Quartal hinzufügen</button>
+      <hr class="divider">
+      <!-- Aktuellen Wert eingeben -->
+      <div class="ctitle" style="margin-top:6px">Aktueller Wert</div>
+      <div class="row2">
+        <div><label>Quartal-Start</label><input type="date" id="qstart-inp"></div>
+        <div><label>Datum</label><input type="date" id="cur-date"></div>
       </div>
-      <div>
-        <label>Aktuelle Fallzahl</label>
-        <input type="number" id="qcases" placeholder="z. B. 1250" oninput="updateAll()">
-      </div>
-
-      <button class="btn btn-primary" id="btn-save-pred" onclick="savePrediction()">
-        💾 Vorhersage speichern &amp; auf GitHub sichern
+      <label>Aktuelle Fallzahl</label>
+      <input type="number" id="cur-cases" placeholder="z. B. 1380">
+      <button class="btn btn-pri" id="save-btn" onclick="saveAll()">
+        💾 Speichern auf GitHub
       </button>
-      <p class="note">Gespeicherte Vorhersagen bleiben erhalten und werden im Verlaufsgraph angezeigt.</p>
-
-      <div id="pred-summary"></div>
+      <p class="note" style="margin-top:5px">Speichert alle Änderungen + aktuellen Wert auf GitHub.</p>
     </div>
 
-    <!-- Modell-Info -->
-    <div class="card" id="model-info" style="display:none">
-      <div class="card-title">Modell</div>
-      <div id="model-detail"></div>
+    <!-- Prognose -->
+    <div class="card" id="pred-card" style="display:none">
+      <div class="ctitle">Aktuelle Prognose</div>
+      <div id="pred-content"></div>
+    </div>
+
+    <!-- Modell -->
+    <div class="card" id="model-card" style="display:none">
+      <div class="ctitle">Modell</div>
+      <div id="model-txt" style="font-size:11px;color:var(--muted)"></div>
     </div>
 
   </div>
 
-  <!-- ── RIGHT ── -->
+  <!-- RIGHT -->
   <div>
-
-    <div class="card" style="padding:14px 14px 10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div class="card-title" style="margin-bottom:0">Fallzahlverlauf &amp; Prognose</div>
-        <div id="legend" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+    <div class="card" style="padding:13px 13px 10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
+        <div class="ctitle" style="margin-bottom:0">Verlauf &amp; Prognose</div>
+        <div id="legend" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>
       </div>
       <div class="chart-wrap"><canvas id="myChart"></canvas></div>
-      <div style="font-size:11px;color:var(--muted);text-align:right;margin-top:4px">
-        X-Achse: Tag im Quartal · Y-Achse: kumulative Fälle
+      <div style="font-size:10px;color:var(--muted);text-align:right;margin-top:3px">
+        X: Tag im Quartal · Y: kumulative Fälle
       </div>
     </div>
 
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div class="card-title" style="margin-bottom:0">Gespeicherte Vorhersagen</div>
-        <button class="btn btn-ghost" style="font-size:11px" onclick="clearPredictions()">Alle löschen</button>
-      </div>
-      <div id="saved-list"></div>
+      <div class="ctitle">Gespeicherte Snapshots</div>
+      <div id="snap-list"></div>
     </div>
-
   </div>
 </div>
 
 <script>
-// ─────────────────────────────────────────────────────────────────────────────
-// CONFIG — owner/repo hardcoded, PAT optional (nur für Schreibzugriff)
-// ─────────────────────────────────────────────────────────────────────────────
-const OWNER = 'shnsn';
-const REPO  = 'fallzahl-dashboard';
+// ── KONSTANTEN ────────────────────────────────────────────────────────────────
+const OWNER    = 'shnsn';
+const REPO     = 'fallzahl-dashboard';
+const DATA_URL = `https://shnsn.github.io/fallzahl-dashboard/data.json`;
+const API_URL  = `https://api.github.com/repos/${OWNER}/${REPO}/contents/data.json`;
 
-function getCfg() {
-  return {
-    owner: OWNER,
-    repo:  REPO,
-    pat:   localStorage.getItem('fz_gh_pat') || '',
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STATE (loaded from GitHub)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── STATE ─────────────────────────────────────────────────────────────────────
 let historical  = [];
 let predictions = [];
-let dataSha     = null; // SHA of data.json on GitHub (needed for update)
+let qstart      = '';
 let chart       = null;
-let canWrite    = false;
+let adminOpen   = false;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GITHUB API
-// ─────────────────────────────────────────────────────────────────────────────
+function getPat() { return localStorage.getItem('fz_pat') || ''; }
+
+// ── PAT MODAL ─────────────────────────────────────────────────────────────────
+function openPat()  { document.getElementById('pat-input').value = getPat();
+                      document.getElementById('pat-modal').classList.add('open'); }
+function closePat() { document.getElementById('pat-modal').classList.remove('open'); }
+function savePat()  {
+  const p = document.getElementById('pat-input').value.trim();
+  localStorage.setItem('fz_pat', p);
+  closePat();
+  updateAdminUI();
+  if (adminOpen) showWritePanel();
+}
+
+// ── ADMIN TOGGLE ──────────────────────────────────────────────────────────────
+function toggleAdmin() {
+  if (!getPat()) { openPat(); return; }
+  adminOpen = !adminOpen;
+  updateAdminUI();
+}
+function updateAdminUI() {
+  const btn = document.getElementById('admin-btn');
+  const panel = document.getElementById('write-panel');
+  if (adminOpen && getPat()) {
+    btn.textContent = '✕ Admin';
+    panel.classList.add('visible');
+    showWritePanel();
+  } else {
+    adminOpen = false;
+    btn.textContent = '✏️';
+    panel.classList.remove('visible');
+  }
+}
+function showWritePanel() {
+  renderEditRows();
+  document.getElementById('qstart-inp').value = qstart;
+  document.getElementById('cur-date').value   = new Date().toISOString().slice(0,10);
+}
+
+// ── LADEN ─────────────────────────────────────────────────────────────────────
 async function loadData() {
-  showStatus('info', '⏳ Lade Daten…');
-
+  showStatus('inf', '⏳ Lade…');
   try {
-    // Öffentliches Repo → direkt von raw.githubusercontent.com lesen (kein Token nötig)
-    const url  = `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/data.json?t=${Date.now()}`;
-    const resp = await fetch(url, { cache: 'no-store' });
-
-    if (resp.status === 404) {
-      showStatus('err', '❌ data.json nicht gefunden — bitte ins Repo hochladen.');
-      return;
-    }
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-    const raw = await resp.json();
-
-    historical  = raw.historical  || [];
-    predictions = raw.predictions || [];
-    if (raw.qstart) document.getElementById('qstart').value = raw.qstart;
-
-    // SHA nur bei Bedarf (Schreiben) über API holen — hier nicht nötig
-    const pat = getCfg().pat;
-    canWrite = !!pat;
-    updateWriteBadge();
-
-    const time = new Date().toLocaleTimeString('de', {hour:'2-digit', minute:'2-digit'});
-    showStatus('ok', `✓ Aktualisiert um ${time}`);
-    document.getElementById('repo-hint').textContent =
-      `shnsn/fallzahl-dashboard · ${time}`;
-
-    setTimeout(() => hideStatus(), 3000);
-    updateAll();
-
-  } catch (e) {
-    showStatus('err', `❌ Fehler beim Laden: ${e.message}`);
-  }
+    const r = await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d  = await r.json();
+    historical  = d.historical  || [];
+    predictions = d.predictions || [];
+    qstart      = d.qstart      || '';
+    const t = new Date().toLocaleTimeString('de', { hour:'2-digit', minute:'2-digit' });
+    document.getElementById('last-upd').textContent = 'Aktualisiert: ' + t;
+    hideStatus();
+    renderAll();
+    if (adminOpen) showWritePanel();
+  } catch(e) { showStatus('err', '❌ ' + e.message); }
 }
 
-async function saveToGitHub() {
-  const { owner, repo, pat } = getCfg();
-  if (!pat) {
-    showStatus('err', '❌ Kein GitHub Token — bitte in Einstellungen eingeben.');
-    return false;
-  }
+// ── SPEICHERN ─────────────────────────────────────────────────────────────────
+async function saveAll() {
+  const pat = getPat();
+  if (!pat) { openPat(); return; }
 
-  const data = {
-    historical,
-    predictions,
-    qstart: document.getElementById('qstart').value,
-  };
-
-  try {
-    const body = {
-      message: `Fallzahlen Update ${new Date().toISOString().slice(0,10)}`,
-      content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
-    };
-    if (dataSha) body.sha = dataSha;
-
-    const resp = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contents/data.json`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${pat}`,
-          'Accept': 'application/vnd.github+json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      }
-    );
-
-    if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.message || resp.status);
-    }
-
-    const result = await resp.json();
-    dataSha = result.content.sha;
-    showStatus('ok', '✓ Auf GitHub gespeichert');
-    setTimeout(() => hideStatus(), 3000);
-    return true;
-
-  } catch (e) {
-    showStatus('err', `❌ Speichern fehlgeschlagen: ${e.message}`);
-    return false;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SETTINGS
-// ─────────────────────────────────────────────────────────────────────────────
-function openSettings() {
-  document.getElementById('s-owner').value = OWNER;
-  document.getElementById('s-repo').value  = REPO;
-  document.getElementById('s-pat').value   = getCfg().pat;
-  document.getElementById('modal-settings').classList.add('open');
-}
-function closeSettings() {
-  document.getElementById('modal-settings').classList.remove('open');
-}
-function saveSettings() {
-  localStorage.setItem('fz_gh_pat', document.getElementById('s-pat').value.trim());
-  closeSettings();
-  loadData();
-}
-
-function updateWriteBadge() {
-  const badge = document.getElementById('write-badge');
-  const btnSave = document.getElementById('btn-save-pred');
-  if (canWrite) {
-    badge.innerHTML = '';
-    btnSave.disabled = false;
-  } else {
-    badge.innerHTML = '<span class="readonly-badge">👁 Nur-Lesen</span>';
-    btnSave.disabled = true;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STATUS BAR
-// ─────────────────────────────────────────────────────────────────────────────
-function showStatus(type, msg) {
-  const bar = document.getElementById('status-bar');
-  bar.className = type;
-  bar.textContent = msg;
-}
-function hideStatus() {
-  const bar = document.getElementById('status-bar');
-  bar.className = '';
-  bar.style.display = 'none';
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HISTORICAL ROWS
-// ─────────────────────────────────────────────────────────────────────────────
-const HIST_COLORS = [
-  'rgba(190,190,210,0.7)', 'rgba(160,180,200,0.7)',
-  'rgba(180,160,200,0.7)', 'rgba(200,170,180,0.7)',
-  'rgba(150,170,190,0.7)', 'rgba(180,190,160,0.7)',
-];
-
-function renderHistRows() {
-  const container = document.getElementById('hist-rows');
-  container.innerHTML = '';
-  if (historical.length === 0) {
-    container.innerHTML = '<div class="empty">Noch keine Quartale.<br>Füge mindestens 2 hinzu.</div>';
-    return;
-  }
-  historical.forEach((q, i) => {
-    const row = document.createElement('div');
-    row.className = 'field-row-4';
-    const dis = canWrite ? '' : 'disabled';
-    row.innerHTML = `
-      <input type="text" value="${q.label||''}" placeholder="Q1 2025" ${dis}
-        oninput="historical[${i}].label=this.value; renderChart()" style="font-weight:600">
-      <input type="number" value="${q.m1||''}" placeholder="M1" ${dis}
-        oninput="historical[${i}].m1=+this.value; updateAll()">
-      <input type="number" value="${q.m2||''}" placeholder="M2" ${dis}
-        oninput="historical[${i}].m2=+this.value; updateAll()">
-      <input type="number" value="${q.m3||''}" placeholder="M3" ${dis}
-        oninput="historical[${i}].m3=+this.value; updateAll()">
-      <button class="btn btn-ghost" onclick="removeHistRow(${i})" ${dis} title="Löschen">✕</button>
-    `;
-    container.appendChild(row);
-  });
-}
-
-function addHistRow() {
-  if (!canWrite) { showStatus('err', '❌ Kein Schreibzugriff — Token in Einstellungen eingeben.'); return; }
-  historical.push({ label: `Q? ${new Date().getFullYear()}`, m1: null, m2: null, m3: null });
-  renderHistRows(); updateAll();
-}
-function removeHistRow(i) {
-  historical.splice(i, 1);
-  renderHistRows(); updateAll();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MODEL
-// ─────────────────────────────────────────────────────────────────────────────
-function fitModel(hist) {
-  const valid = hist.filter(q => q.m1 > 0 && q.m2 > 0 && q.m3 > 0);
-  if (valid.length === 0) return null;
-  const alphas = [];
-  for (const q of valid) {
-    const f1 = q.m1 / q.m3, f2 = q.m2 / q.m3;
-    if (f1 > 0 && f1 < 1) alphas.push(Math.log(f1) / Math.log(1/3));
-    if (f2 > 0 && f2 < 1) alphas.push(Math.log(f2) / Math.log(2/3));
-  }
-  if (!alphas.length) return null;
-  const alpha = alphas.reduce((a,b)=>a+b,0) / alphas.length;
-
-  const errors = [];
-  for (const q of valid) {
-    errors.push(q.m3 / (q.m1 / Math.pow(1/3, alpha)));
-    errors.push(q.m3 / (q.m2 / Math.pow(2/3, alpha)));
-  }
-  const meanErr = errors.reduce((a,b)=>a+b,0) / errors.length;
-  const stdErr  = Math.sqrt(errors.reduce((a,b)=>a+(b-meanErr)**2,0) / errors.length);
-  return { alpha, meanErr, stdErr: Math.max(stdErr, 0.04), valid };
-}
-
-function growthFrac(day, alpha, T) {
-  if (day <= 0) return 0;
-  if (day >= T) return 1;
-  return Math.pow(day / T, alpha);
-}
-function quarterEnd(s) {
-  const d = new Date(s); d.setMonth(d.getMonth() + 3); return d;
-}
-function totalQDays(s) { return (quarterEnd(s) - new Date(s)) / 86400000; }
-function dayOfQ(s, c)  { return Math.max(0, (new Date(c) - new Date(s)) / 86400000); }
-
-function computePrediction() {
-  const qstart  = document.getElementById('qstart').value;
-  const qtoday  = document.getElementById('qtoday').value;
-  const qcasesV = document.getElementById('qcases').value;
-  if (!qstart || !qtoday || !qcasesV) return null;
-  const qcases = parseFloat(qcasesV);
-  if (isNaN(qcases) || qcases <= 0) return null;
-  const model = fitModel(historical);
-  if (!model) return null;
-  const T   = totalQDays(qstart);
-  const day = dayOfQ(qstart, qtoday);
-  if (day <= 0) return null;
-  const f   = growthFrac(day, model.alpha, T);
-  if (f <= 0) return null;
-  const predicted = qcases / f;
-  return {
-    predicted,
-    ciLow:  predicted * (model.meanErr - 1.65 * model.stdErr),
-    ciHigh: predicted * (model.meanErr + 1.65 * model.stdErr),
-    day, T, f, model, qcases, qstart, qtoday
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// UI
-// ─────────────────────────────────────────────────────────────────────────────
-function updateAll() {
-  renderHistRows();
-  renderPredSummary();
-  renderChart();
-  renderSavedList();
-  renderModelInfo();
-}
-
-function renderPredSummary() {
-  const container = document.getElementById('pred-summary');
-  const pred = computePrediction();
-  if (!pred) { container.innerHTML = ''; return; }
-
-  const pct = pred.day / pred.T;
-  const expected = pred.predicted * pred.f * pred.model.meanErr;
-  const delta    = pred.qcases - expected;
-  const deltaPct = (delta / expected * 100).toFixed(1);
-  const absDelta = Math.abs(parseFloat(deltaPct));
-
-  let statusHtml = '';
-  if (absDelta < 3) {
-    statusHtml = `<span class="status-badge status-on">≈ Im Zielkorridor</span>`;
-  } else if (delta > 0) {
-    statusHtml = `<span class="status-badge status-above">▲ +${deltaPct}% über Prognose</span>`;
-  } else {
-    statusHtml = `<span class="status-badge status-below">▼ ${deltaPct}% unter Prognose</span>`;
-  }
-
-  container.innerHTML = `
-    <div class="pred-box">
-      <div class="pred-label">Vorhergesagte Quartalsfälle</div>
-      <div class="pred-value">${Math.round(pred.predicted).toLocaleString('de')}</div>
-      <div class="pred-ci">
-        90%-KI: <strong>${Math.round(pred.ciLow).toLocaleString('de')}</strong>
-        – <strong>${Math.round(pred.ciHigh).toLocaleString('de')}</strong>
-      </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">
-        Tag ${Math.round(pred.day)} von ${Math.round(pred.T)} · ${(pct*100).toFixed(0)}% des Quartals
-      </div>
-      ${statusHtml}
-    </div>`;
-}
-
-function renderModelInfo() {
-  const model = fitModel(historical);
-  const box = document.getElementById('model-info');
-  if (!model) { box.style.display = 'none'; return; }
-  box.style.display = '';
-  document.getElementById('model-detail').innerHTML = `
-    <div class="alpha-badge"><span class="dot-berry"></span>
-      Wachstumsexponent α = <strong>${model.alpha.toFixed(3)}</strong>
-      &nbsp;(α&lt;1: konkav = schneller Start)
-    </div>
-    <div style="margin-top:5px;font-size:12px;color:var(--muted)">
-      ${model.valid.length} historische Quartal${model.valid.length!==1?'e':''}
-      · Streuung ±${(model.stdErr*100).toFixed(1)}%
-    </div>`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CHART
-// ─────────────────────────────────────────────────────────────────────────────
-function buildDatasets() {
-  const qstart  = document.getElementById('qstart').value;
-  const qtoday  = document.getElementById('qtoday').value;
-  const qcasesV = document.getElementById('qcases').value;
-  const model   = fitModel(historical);
-  const datasets = [];
-
-  // Historical lines
-  historical.forEach((q, i) => {
-    if (!q.m1 || !q.m2 || !q.m3) return;
-    const pts = [];
-    for (let d = 0; d <= 90; d++) {
-      let v = d === 0 ? 0
-            : d <= 30 ? (q.m1/30)*d
-            : d <= 60 ? q.m1 + ((q.m2-q.m1)/30)*(d-30)
-                      : q.m2 + ((q.m3-q.m2)/30)*(d-60);
-      pts.push({ x: d, y: Math.round(v) });
-    }
-    datasets.push({ label: q.label, data: pts, borderColor: HIST_COLORS[i%HIST_COLORS.length], backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3, borderDash: [4,3], order: 10+i });
-  });
-
-  if (model && qstart) {
-    const T    = totalQDays(qstart);
-    const pred = computePrediction();
-    if (pred) {
-      const F = pred.predicted, Fl = pred.ciLow, Fh = pred.ciHigh;
-      const ciUpper = [], ciLower = [], predLine = [];
-      for (let d = 0; d <= T; d++) {
-        const f = growthFrac(d, model.alpha, T);
-        ciUpper.push({ x: d, y: Fh * f });
-        ciLower.push({ x: d, y: Fl * f });
-        predLine.push({ x: d, y: F  * f });
-      }
-      datasets.push({ label: 'KI 90%',   data: ciUpper, borderColor: 'transparent', backgroundColor: 'rgba(146,78,125,0.12)', fill: '+1', pointRadius: 0, order: 3, tension: 0.3 });
-      datasets.push({ label: '_ci_lower', data: ciLower, borderColor: 'rgba(146,78,125,0.30)', backgroundColor: 'transparent', fill: false, pointRadius: 0, borderWidth: 1, borderDash: [3,3], order: 3, tension: 0.3 });
-      datasets.push({ label: 'Prognose',  data: predLine, borderColor: 'var(--berry)', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.3, order: 2 });
-    }
-
-    // Saved trajectories + dots
-    predictions.filter(p => p.qstart === qstart).forEach(p => {
-      const line = [];
-      for (let d = 0; d <= T; d++) line.push({ x: d, y: p.predicted * growthFrac(d, model.alpha, T) });
-      datasets.push({ label: `Vorhersage ${p.date}`, data: line, borderColor: 'rgba(192,138,180,0.55)', backgroundColor: 'transparent', borderWidth: 1.2, borderDash: [6,4], pointRadius: 0, tension: 0.3, order: 4 });
-    });
-
-    const savedPts = predictions.filter(p => p.qstart === qstart).map(p => ({ x: p.day, y: p.cases }));
-    if (savedPts.length) datasets.push({ label: 'Ist-Werte', data: savedPts, borderColor: 'var(--berry)', backgroundColor: 'var(--berry-light)', borderWidth: 2, pointRadius: 6, showLine: false, order: 1 });
-
-    if (qtoday && qcasesV) {
-      const day = dayOfQ(qstart, qtoday), cases = parseFloat(qcasesV);
-      if (day >= 0 && !isNaN(cases)) datasets.push({ label: 'Aktuell', data: [{ x: day, y: cases }], borderColor: '#924E7D', backgroundColor: '#A86098', borderWidth: 2.5, pointRadius: 9, showLine: false, order: 0 });
-    }
-  }
-  return datasets;
-}
-
-function renderChart() {
-  const canvas   = document.getElementById('myChart');
-  const datasets = buildDatasets();
-  const qstart   = document.getElementById('qstart').value;
-  const xMax     = qstart ? Math.ceil(totalQDays(qstart)) : 90;
-
-  const cfg = {
-    type: 'line',
-    data: { datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: { duration: 180 },
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: ctx => `Tag ${Math.round(ctx[0].parsed.x)}`,
-            label: ctx => ctx.dataset.label?.startsWith('_') ? null : `${ctx.dataset.label}: ${Math.round(ctx.parsed.y).toLocaleString('de')}`,
-          },
-          filter: item => !item.dataset.label?.startsWith('_'),
-        }
-      },
-      scales: {
-        x: { type: 'linear', min: 0, max: xMax, title: { display: true, text: 'Tag im Quartal', color: 'var(--muted)', font:{size:11} }, ticks: { stepSize: 10, color: 'var(--muted)', font:{size:10}, callback: v => `T${v}` }, grid: { color: 'rgba(0,0,0,0.05)' } },
-        y: { title: { display: true, text: 'Kumulative Fälle', color: 'var(--muted)', font:{size:11} }, ticks: { color: 'var(--muted)', font:{size:10}, callback: v => v>=1000?(v/1000).toFixed(1)+'k':v }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true },
-      }
-    }
-  };
-
-  if (chart) { chart.data.datasets = datasets; chart.options.scales.x.max = xMax; chart.update(); }
-  else       { chart = new Chart(canvas, cfg); }
-
-  // Legend
-  const leg = document.getElementById('legend');
-  leg.innerHTML = '';
-  datasets.filter(d => d.label && !d.label.startsWith('_') && !d.label.startsWith('Vorhersage '))
-    .slice(0, 5)
-    .forEach(d => {
-      const el = document.createElement('div');
-      el.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)';
-      el.innerHTML = `<span style="width:14px;height:3px;border-radius:2px;background:${d.borderColor||d.backgroundColor||'#ccc'};display:inline-block"></span>${d.label}`;
-      leg.appendChild(el);
-    });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SAVE PREDICTION
-// ─────────────────────────────────────────────────────────────────────────────
-async function savePrediction() {
-  if (!canWrite) return;
-  const pred = computePrediction();
-  if (!pred) { showStatus('err', '❌ Quartalstart, Datum und Fallzahl eingeben.'); return; }
-
-  const btn = document.getElementById('btn-save-pred');
+  const btn = document.getElementById('save-btn');
   btn.innerHTML = '<span class="spin">⏳</span> Speichert…';
   btn.disabled  = true;
 
-  predictions.push({
-    id: Date.now(),
-    date: pred.qtoday,
-    qstart: pred.qstart,
-    day: Math.round(pred.day),
-    cases: pred.qcases,
-    predicted: Math.round(pred.predicted),
-    ciLow:     Math.round(pred.ciLow),
-    ciHigh:    Math.round(pred.ciHigh),
+  try {
+    // 1) Aktuellen SHA von GitHub API holen (IMMER frisch — verhindert Conflict-Fehler)
+    const getResp = await fetch(API_URL, {
+      headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (!getResp.ok) {
+      const e = await getResp.json();
+      throw new Error(e.message || 'SHA-Abruf fehlgeschlagen (' + getResp.status + ')');
+    }
+    const current = await getResp.json();
+    const sha     = current.sha;
+
+    // 2) Daten aus Edit-Rows lesen
+    const rows = document.querySelectorAll('.edit-row');
+    const newHist = [];
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      const label = inputs[0].value.trim();
+      const m1    = parseFloat(inputs[1].value);
+      const m2    = parseFloat(inputs[2].value);
+      const m3    = parseFloat(inputs[3].value);
+      if (label && !isNaN(m1) && !isNaN(m2) && !isNaN(m3)) {
+        newHist.push({ label, m1, m2, m3 });
+      }
+    });
+
+    // 3) Snapshot hinzufügen falls Fallzahl eingegeben
+    const newPreds = [...predictions];
+    const casesVal = parseFloat(document.getElementById('cur-cases').value);
+    const dateVal  = document.getElementById('cur-date').value;
+    const qsVal    = document.getElementById('qstart-inp').value;
+    if (!isNaN(casesVal) && casesVal > 0 && dateVal && qsVal) {
+      const day = Math.round((new Date(dateVal) - new Date(qsVal)) / 86400000);
+      newPreds.push({
+        id: Date.now(), date: dateVal, qstart: qsVal,
+        day, cases: casesVal, predicted: null, ciLow: null, ciHigh: null
+      });
+    }
+
+    const data = {
+      historical: newHist.sort((a,b) => a.label.localeCompare(b.label)),
+      predictions: newPreds,
+      qstart: qsVal || qstart,
+    };
+
+    // 4) PUT mit frischem SHA
+    const putResp = await fetch(API_URL, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${pat}`,
+        'Accept':        'application/vnd.github+json',
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
+        message: 'Fallzahlen Update ' + new Date().toISOString().slice(0,10),
+        content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
+        sha,
+      })
+    });
+
+    if (!putResp.ok) {
+      const e = await putResp.json();
+      throw new Error(e.message || 'Speichern fehlgeschlagen (' + putResp.status + ')');
+    }
+
+    btn.innerHTML = '✓ Gespeichert!';
+    btn.style.background = 'var(--ok)';
+    showStatus('ok', '✓ Auf GitHub gespeichert — Dashboard wird in Kürze aktualisiert.');
+
+    // Lokalen State aktualisieren
+    historical  = data.historical;
+    predictions = data.predictions;
+    qstart      = data.qstart;
+    document.getElementById('cur-cases').value = '';
+    renderAll();
+
+    setTimeout(() => {
+      btn.innerHTML = '💾 Speichern auf GitHub';
+      btn.style.background = '';
+      btn.disabled = false;
+      hideStatus();
+    }, 3000);
+
+  } catch(e) {
+    showStatus('err', '❌ ' + e.message);
+    btn.innerHTML = '❌ Fehler — nochmal versuchen';
+    btn.style.background = 'var(--warn)';
+    btn.disabled = false;
+    setTimeout(() => { btn.innerHTML = '💾 Speichern auf GitHub'; btn.style.background = ''; }, 3000);
+  }
+}
+
+// ── EDIT ROWS ─────────────────────────────────────────────────────────────────
+function renderEditRows() {
+  const container = document.getElementById('edit-rows');
+  container.innerHTML = '';
+  historical.forEach((q, i) => {
+    const row = document.createElement('div');
+    row.className = 'field-4 edit-row';
+    row.innerHTML = `
+      <input type="text"   value="${q.label||''}" placeholder="Q1 2026" style="font-weight:600">
+      <input type="number" value="${q.m1||''}"    placeholder="M1">
+      <input type="number" value="${q.m2||''}"    placeholder="M2">
+      <input type="number" value="${q.m3||''}"    placeholder="M3">
+      <button class="btn btn-ghost" onclick="this.closest('.edit-row').remove()" title="Löschen">✕</button>`;
+    container.appendChild(row);
   });
-
-  const ok = await saveToGitHub();
-  btn.innerHTML = ok ? '✓ Gespeichert!' : '❌ Fehler';
-  btn.style.background = ok ? 'var(--success)' : 'var(--warn)';
-  setTimeout(() => { btn.innerHTML = '💾 Vorhersage speichern & auf GitHub sichern'; btn.style.background = ''; btn.disabled = false; }, 2000);
-
-  if (ok) { renderSavedList(); renderChart(); }
-  else     { predictions.pop(); } // rollback
+}
+function addRow() {
+  const container = document.getElementById('edit-rows');
+  const row = document.createElement('div');
+  row.className = 'field-4 edit-row';
+  row.innerHTML = `
+    <input type="text"   placeholder="Q1 2026" style="font-weight:600">
+    <input type="number" placeholder="M1">
+    <input type="number" placeholder="M2">
+    <input type="number" placeholder="M3">
+    <button class="btn btn-ghost" onclick="this.closest('.edit-row').remove()">✕</button>`;
+  container.appendChild(row);
+  row.querySelector('input').focus();
 }
 
-async function clearPredictions() {
-  if (!confirm('Alle gespeicherten Vorhersagen löschen?')) return;
-  predictions = [];
-  await saveToGitHub();
-  renderSavedList(); renderChart();
+// ── MODELL ────────────────────────────────────────────────────────────────────
+function fitModel(hist) {
+  const v = hist.filter(q => q.m1>0 && q.m2>0 && q.m3>0);
+  if (!v.length) return null;
+  const al = [];
+  for (const q of v) {
+    const f1=q.m1/q.m3, f2=q.m2/q.m3;
+    if(f1>0&&f1<1) al.push(Math.log(f1)/Math.log(1/3));
+    if(f2>0&&f2<1) al.push(Math.log(f2)/Math.log(2/3));
+  }
+  if(!al.length) return null;
+  const alpha = al.reduce((a,b)=>a+b,0)/al.length;
+  const errs  = [];
+  for (const q of v) {
+    errs.push(q.m3/(q.m1/Math.pow(1/3,alpha)));
+    errs.push(q.m3/(q.m2/Math.pow(2/3,alpha)));
+  }
+  const me = errs.reduce((a,b)=>a+b,0)/errs.length;
+  const se = Math.sqrt(errs.reduce((a,b)=>a+(b-me)**2,0)/errs.length);
+  return { alpha, meanErr:me, stdErr:Math.max(se,0.04), valid:v };
+}
+function gf(d,a,T) { return d<=0?0:d>=T?1:Math.pow(d/T,a); }
+function qT(s)     { const d=new Date(s); d.setMonth(d.getMonth()+3); return (d-new Date(s))/86400000; }
+function dq(s,c)   { return Math.max(0,(new Date(c)-new Date(s))/86400000); }
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderHistTable();
+  renderPredCard();
+  renderModelCard();
+  renderChart();
+  renderSnaps();
 }
 
-async function deletePrediction(id) {
-  predictions = predictions.filter(p => p.id !== id);
-  await saveToGitHub();
-  renderSavedList(); renderChart();
+function renderHistTable() {
+  const tb = document.getElementById('hist-tbody');
+  tb.innerHTML = !historical.length
+    ? '<tr><td colspan="4"><div class="empty">Noch keine Daten.</div></td></tr>'
+    : historical.map(q=>`<tr>
+        <td>${q.label||'—'}</td>
+        <td>${(q.m1||0).toLocaleString('de')}</td>
+        <td>${(q.m2||0).toLocaleString('de')}</td>
+        <td>${(q.m3||0).toLocaleString('de')}</td>
+      </tr>`).join('');
 }
 
-function renderSavedList() {
-  const container = document.getElementById('saved-list');
-  const qstart    = document.getElementById('qstart').value;
-  const relevant  = predictions.filter(p => p.qstart === qstart);
-
-  if (relevant.length === 0) {
-    container.innerHTML = `<div class="empty">Noch keine Vorhersagen gespeichert.</div>`;
+function renderPredCard() {
+  const card  = document.getElementById('pred-card');
+  const model = fitModel(historical);
+  if (!model || !qstart) { card.style.display='none'; return; }
+  card.style.display='';
+  const T      = qT(qstart);
+  const today  = new Date().toISOString().slice(0,10);
+  const dayNow = dq(qstart, today);
+  const pct    = Math.min(100,(dayNow/T*100)).toFixed(0);
+  const snaps  = predictions.filter(p=>p.qstart===qstart).sort((a,b)=>b.day-a.day);
+  const latest = snaps[0];
+  if (!latest) {
+    document.getElementById('pred-content').innerHTML =
+      '<div class="empty">Noch kein Snapshot.<br>Sage Claude: „Heute haben wir X Fälle"</div>';
     return;
   }
+  const F  = latest.cases / gf(latest.day, model.alpha, T);
+  const Fl = F*(model.meanErr-1.65*model.stdErr);
+  const Fh = F*(model.meanErr+1.65*model.stdErr);
+  const exp = F*gf(dayNow,model.alpha,T)*model.meanErr;
+  const delta = ((latest.cases-exp)/exp*100).toFixed(1);
+  const abs   = Math.abs(parseFloat(delta));
+  const bc    = abs<3?'b-neu':parseFloat(delta)>0?'b-ok':'b-warn';
+  const bt    = abs<3?'≈ Im Korridor':parseFloat(delta)>0?`▲ +${delta}% über Prognose`:`▼ ${delta}% unter Prognose`;
+  document.getElementById('pred-content').innerHTML = `
+    <div class="pbox">
+      <div class="plbl">Vorhergesagte Quartalsfälle</div>
+      <div class="pbig">${Math.round(F).toLocaleString('de')}</div>
+      <div class="pci">90%-KI: <strong>${Math.round(Fl).toLocaleString('de')}</strong> – <strong>${Math.round(Fh).toLocaleString('de')}</strong></div>
+      <div class="pmeta">Basis: ${latest.cases.toLocaleString('de')} Fälle am ${latest.date} · T${latest.day} · ${pct}%</div>
+      <span class="badge ${bc}">${bt}</span>
+    </div>`;
+}
 
-  container.innerHTML = relevant.map(p => {
-    const qtoday  = document.getElementById('qtoday').value;
-    const qcasesV = document.getElementById('qcases').value;
-    let statusHtml = '';
-    if (qtoday && qcasesV && qstart) {
-      const model = fitModel(historical);
-      if (model) {
-        const T = totalQDays(qstart);
-        const f = growthFrac(dayOfQ(qstart, qtoday), model.alpha, T);
-        const expected = p.predicted * f;
-        const delta = ((parseFloat(qcasesV) - expected) / expected * 100).toFixed(1);
-        statusHtml = Math.abs(parseFloat(delta)) < 3
-          ? `<span style="font-size:11px;color:var(--neutral)">≈ im Korridor</span>`
-          : parseFloat(delta) > 0
-            ? `<span style="font-size:11px;color:var(--success)">▲ +${delta}%</span>`
-            : `<span style="font-size:11px;color:var(--warn)">▼ ${delta}%</span>`;
-      }
+function renderModelCard() {
+  const card  = document.getElementById('model-card');
+  const model = fitModel(historical);
+  if (!model) { card.style.display='none'; return; }
+  card.style.display='';
+  document.getElementById('model-txt').innerHTML =
+    `α = <strong style="color:var(--berry)">${model.alpha.toFixed(3)}</strong>
+     &nbsp;·&nbsp; ${model.valid.length} Quartale
+     &nbsp;·&nbsp; ±${(model.stdErr*100).toFixed(1)}% Streuung`;
+}
+
+const HC=['rgba(190,190,210,.65)','rgba(160,180,200,.65)','rgba(180,160,200,.65)',
+          'rgba(200,170,180,.65)','rgba(150,170,190,.65)','rgba(180,190,160,.65)'];
+
+function renderChart() {
+  const model = fitModel(historical);
+  const T     = qstart ? qT(qstart) : 90;
+  const xMax  = Math.ceil(T);
+  const sets  = [];
+
+  historical.forEach((q,i)=>{
+    if(!q.m1||!q.m2||!q.m3) return;
+    const pts=[];
+    for(let d=0;d<=90;d++){
+      const v=d===0?0:d<=30?(q.m1/30)*d:d<=60?q.m1+((q.m2-q.m1)/30)*(d-30):q.m2+((q.m3-q.m2)/30)*(d-60);
+      pts.push({x:d,y:Math.round(v)});
     }
-    return `
-      <div class="saved-item">
-        <div style="display:flex;align-items:center;gap:4px">
-          <span class="saved-dot" style="background:var(--berry-light)"></span>
-          <span style="color:var(--muted)">${p.date} · T${p.day}</span>
-        </div>
-        ${statusHtml}
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="saved-num">${p.predicted.toLocaleString('de')}</span>
-          <span style="font-size:10px;color:var(--muted)">[${p.ciLow.toLocaleString('de')}–${p.ciHigh.toLocaleString('de')}]</span>
-          ${canWrite ? `<button class="btn btn-ghost" style="font-size:10px;padding:2px 5px" onclick="deletePrediction(${p.id})">✕</button>` : ''}
-        </div>
-      </div>`;
+    sets.push({label:q.label,data:pts,borderColor:HC[i%HC.length],backgroundColor:'transparent',
+               borderWidth:1.5,pointRadius:0,tension:.3,borderDash:[4,3],order:10+i});
+  });
+
+  if (model && qstart) {
+    const snaps  = predictions.filter(p=>p.qstart===qstart).sort((a,b)=>b.day-a.day);
+    const latest = snaps[0];
+    if (latest) {
+      const F  = latest.cases/gf(latest.day,model.alpha,T);
+      const Fl = F*(model.meanErr-1.65*model.stdErr);
+      const Fh = F*(model.meanErr+1.65*model.stdErr);
+      const u=[],l=[],p=[];
+      for(let d=0;d<=T;d++){
+        const f=gf(d,model.alpha,T);
+        u.push({x:d,y:Fh*f}); l.push({x:d,y:Fl*f}); p.push({x:d,y:F*f});
+      }
+      sets.push({label:'KI 90%',data:u,borderColor:'transparent',
+                 backgroundColor:'rgba(146,78,125,.12)',fill:'+1',pointRadius:0,order:3,tension:.3});
+      sets.push({label:'_kil',data:l,borderColor:'rgba(146,78,125,.28)',backgroundColor:'transparent',
+                 fill:false,pointRadius:0,borderWidth:1,borderDash:[3,3],order:3,tension:.3});
+      sets.push({label:'Prognose',data:p,borderColor:'var(--berry)',backgroundColor:'transparent',
+                 borderWidth:2.5,pointRadius:0,tension:.3,order:2});
+      const sp=snaps.map(s=>({x:s.day,y:s.cases}));
+      sets.push({label:'Ist-Werte',data:sp,borderColor:'var(--berry)',backgroundColor:'var(--berry-lt)',
+                 borderWidth:2,pointRadius:6,showLine:false,order:1});
+      sets.push({label:'Aktuell',data:[{x:latest.day,y:latest.cases}],
+                 borderColor:'#924E7D',backgroundColor:'#A86098',
+                 borderWidth:2.5,pointRadius:9,showLine:false,order:0});
+    }
+  }
+
+  const cfg={type:'line',data:{datasets:sets},options:{
+    responsive:true,maintainAspectRatio:false,animation:{duration:200},
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{
+      filter:i=>!i.dataset.label?.startsWith('_'),
+      callbacks:{
+        title:c=>`Tag ${Math.round(c[0].parsed.x)}`,
+        label:c=>c.dataset.label?.startsWith('_')?null:`${c.dataset.label}: ${Math.round(c.parsed.y).toLocaleString('de')}`,
+      }
+    }},
+    scales:{
+      x:{type:'linear',min:0,max:xMax,
+         title:{display:true,text:'Tag im Quartal',color:'var(--muted)',font:{size:10}},
+         ticks:{stepSize:10,color:'var(--muted)',font:{size:10},callback:v=>`T${v}`},
+         grid:{color:'rgba(0,0,0,.04)'}},
+      y:{beginAtZero:true,
+         title:{display:true,text:'Kumulative Fälle',color:'var(--muted)',font:{size:10}},
+         ticks:{color:'var(--muted)',font:{size:10},callback:v=>v>=1000?(v/1000).toFixed(1)+'k':v},
+         grid:{color:'rgba(0,0,0,.04)'}},
+    }
+  }};
+
+  if(chart){chart.data.datasets=sets;chart.options.scales.x.max=xMax;chart.update();}
+  else     {chart=new Chart(document.getElementById('myChart'),cfg);}
+
+  const leg=document.getElementById('legend');
+  leg.innerHTML='';
+  sets.filter(s=>s.label&&!s.label.startsWith('_')&&s.label!=='Aktuell').slice(0,5).forEach(s=>{
+    const el=document.createElement('div');
+    el.style.cssText='display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)';
+    el.innerHTML=`<span style="width:13px;height:3px;border-radius:2px;background:${s.borderColor||s.backgroundColor};display:inline-block"></span>${s.label}`;
+    leg.appendChild(el);
+  });
+}
+
+function renderSnaps() {
+  const container=document.getElementById('snap-list');
+  const model=fitModel(historical);
+  const rel=qstart?predictions.filter(p=>p.qstart===qstart).sort((a,b)=>b.day-a.day):[];
+  if(!rel.length){
+    container.innerHTML='<div class="empty">Noch keine Snapshots.<br>Sage Claude: „Heute haben wir X Fälle"</div>';
+    return;
+  }
+  const T=qstart?qT(qstart):90;
+  container.innerHTML=rel.map((p,i)=>{
+    let badge='';
+    if(model&&i===0){
+      const F=p.cases/gf(p.day,model.alpha,T);
+      const today=new Date().toISOString().slice(0,10);
+      const exp=F*gf(dq(qstart,today),model.alpha,T)*model.meanErr;
+      const delta=((p.cases-exp)/exp*100).toFixed(1);
+      const abs=Math.abs(parseFloat(delta));
+      const bc=abs<3?'b-neu':parseFloat(delta)>0?'b-ok':'b-warn';
+      const bt=abs<3?'≈ Korridor':parseFloat(delta)>0?`▲ +${delta}%`:`▼ ${delta}%`;
+      badge=`<span class="badge ${bc}" style="padding:2px 7px;margin-top:0">${bt}</span>`;
+    }
+    return `<div class="srow">
+      <div><span class="sdot"></span><span class="smeta">${p.date} · T${p.day}</span></div>
+      ${badge}
+      <div class="snum">${p.cases.toLocaleString('de')}</div>
+    </div>`;
   }).join('');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// INIT + AUTO-REFRESH
-// ─────────────────────────────────────────────────────────────────────────────
-(function init() {
-  document.getElementById('qtoday').value = new Date().toISOString().slice(0,10);
-  updateWriteBadge();
-  loadData();
+// ── STATUS ────────────────────────────────────────────────────────────────────
+function showStatus(t,m){const b=document.getElementById('sbar');b.className=t;b.textContent=m;}
+function hideStatus(){const b=document.getElementById('sbar');b.className='';b.style.display='none';}
 
-  // Auto-Refresh alle 5 Minuten (für Notion-Embed)
-  setInterval(() => {
-    loadData();
-    // Heute-Datum aktualisieren falls Mitternacht überschritten
-    document.getElementById('qtoday').value = new Date().toISOString().slice(0,10);
-  }, 5 * 60 * 1000);
-})();
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadData();
+setInterval(loadData, 5*60*1000);
 </script>
 </body>
 </html>
