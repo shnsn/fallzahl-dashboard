@@ -447,26 +447,84 @@ function addRow() {
 }
 
 // ── MODELL ────────────────────────────────────────────────────────────────────
-function fitModel(hist) {
-  const v = hist.filter(q => q.m1>0 && q.m2>0 && q.m3>0);
-  if (!v.length) return null;
+// fitModel(hist, snaps): lernt alpha aus historischen Quartalen UND Snapshot-Paaren
+function fitModel(hist, snaps) {
+  const v  = hist.filter(q => q.m1>0 && q.m2>0 && q.m3>0);
   const al = [];
+
+  // Historische Alpha-Schätzung aus M1/M2/M3-Verhältnissen
   for (const q of v) {
     const f1=q.m1/q.m3, f2=q.m2/q.m3;
     if(f1>0&&f1<1) al.push(Math.log(f1)/Math.log(1/3));
     if(f2>0&&f2<1) al.push(Math.log(f2)/Math.log(2/3));
   }
-  if(!al.length) return null;
-  const alpha = al.reduce((a,b)=>a+b,0)/al.length;
-  const errs  = [];
-  for (const q of v) {
-    errs.push(q.m3/(q.m1/Math.pow(1/3,alpha)));
-    errs.push(q.m3/(q.m2/Math.pow(2/3,alpha)));
+
+  // NEU: Alpha aus Snapshot-Paaren (α = log(c1/c2)/log(d1/d2))
+  // T kürzt sich raus → T-unabhängig, lernt direkt aus aktuellen Daten
+  let nSnapPairs = 0;
+  if (snaps && snaps.length >= 2) {
+    const sorted = [...snaps].sort((a,b)=>a.day-b.day);
+    for (let i=0; i<sorted.length; i++) {
+      for (let j=i+1; j<sorted.length; j++) {
+        const d1=sorted[i].day, c1=sorted[i].cases;
+        const d2=sorted[j].day, c2=sorted[j].cases;
+        if (d2>d1 && c2>c1 && d1>0 && d2>0) {
+          const ap = Math.log(c1/c2)/Math.log(d1/d2);
+          if (ap>0.1 && ap<2.0) { al.push(ap); nSnapPairs++; }
+        }
+      }
+    }
   }
-  const me = errs.reduce((a,b)=>a+b,0)/errs.length;
-  const se = Math.sqrt(errs.reduce((a,b)=>a+(b-me)**2,0)/errs.length);
-  return { alpha, meanErr:me, stdErr:Math.max(se,0.04), valid:v };
+
+  if (!al.length) return null;
+  const alpha = al.reduce((a,b)=>a+b,0)/al.length;
+
+  // Historische Fehlerstreuung (für Fallback-CI wenn nur 1 Snapshot)
+  const errs=[];
+  for (const q of v) {
+    const e1=q.m3/(q.m1/Math.pow(1/3,alpha));
+    const e2=q.m3/(q.m2/Math.pow(2/3,alpha));
+    if(isFinite(e1)) errs.push(e1);
+    if(isFinite(e2)) errs.push(e2);
+  }
+  let meanErr=1, stdErr=0.08;
+  if (errs.length) {
+    meanErr = errs.reduce((a,b)=>a+b,0)/errs.length;
+    stdErr  = Math.sqrt(errs.reduce((a,b)=>a+(b-meanErr)**2,0)/errs.length);
+    stdErr  = Math.max(stdErr, 0.04);
+  }
+  return { alpha, meanErr, stdErr, valid:v, nSnapPairs };
 }
+
+// Least-Squares Prognose: F = Σ(c_i·f_i) / Σ(f_i²)
+// CI: aus Residuen wenn n≥2, sonst historisch
+function computePred(snaps, alpha, T, model) {
+  if (!snaps || !snaps.length) return null;
+  let num=0, den=0;
+  for (const s of snaps) {
+    const f=gf(s.day,alpha,T); num+=s.cases*f; den+=f*f;
+  }
+  if (!den) return null;
+  const F=num/den;
+  let ciLow, ciHigh;
+  if (snaps.length >= 2) {
+    const res=snaps.map(s=>s.cases-F*gf(s.day,alpha,T));
+    const sigma2=res.reduce((a,r)=>a+r*r,0)/(snaps.length-1);
+    const seF=Math.sqrt(sigma2/den);
+    ciLow  = F-1.65*seF;
+    ciHigh = F+1.65*seF;
+    // Mindestbreite 2%
+    const hw=Math.max(F*0.02,(ciHigh-ciLow)/2);
+    ciLow=F-hw; ciHigh=F+hw;
+  } else if (model) {
+    ciLow  = F*(model.meanErr-1.65*model.stdErr);
+    ciHigh = F*(model.meanErr+1.65*model.stdErr);
+  } else {
+    ciLow=F*0.92; ciHigh=F*1.08;
+  }
+  return { F, ciLow:Math.max(0,ciLow), ciHigh, n:snaps.length };
+}
+
 function gf(d,a,T) { return d<=0?0:d>=T?1:Math.pow(d/T,a); }
 function qT(s)     { const d=new Date(s); d.setMonth(d.getMonth()+3); return (d-new Date(s))/86400000; }
 function dq(s,c)   { return Math.max(0,(new Date(c)-new Date(s))/86400000); }
@@ -493,34 +551,35 @@ function renderHistTable() {
 }
 
 function renderPredCard() {
-  const card  = document.getElementById('pred-card');
-  const model = fitModel(historical);
+  const card   = document.getElementById('pred-card');
+  const snaps  = qstart ? predictions.filter(p=>p.qstart===qstart).sort((a,b)=>a.day-b.day) : [];
+  const model  = fitModel(historical, snaps);
   if (!model || !qstart) { card.style.display='none'; return; }
   card.style.display='';
   const T      = qT(qstart);
   const today  = new Date().toISOString().slice(0,10);
   const dayNow = dq(qstart, today);
   const pct    = Math.min(100,(dayNow/T*100)).toFixed(0);
-  const snaps  = predictions.filter(p=>p.qstart===qstart).sort((a,b)=>b.day-a.day);
-  const latest = snaps[0];
-  if (!latest) {
+  if (!snaps.length) {
     document.getElementById('pred-content').innerHTML =
       '<div class="empty">Noch kein Snapshot.<br>Sage Claude: „Heute haben wir X Fälle"</div>';
     return;
   }
-  const F  = latest.cases / gf(latest.day, model.alpha, T);
-  const Fl = F*(model.meanErr-1.65*model.stdErr);
-  const Fh = F*(model.meanErr+1.65*model.stdErr);
-  const exp = F*gf(dayNow,model.alpha,T)*model.meanErr;
-  const delta = ((latest.cases-exp)/exp*100).toFixed(1);
-  const abs   = Math.abs(parseFloat(delta));
-  const bc    = abs<3?'b-neu':parseFloat(delta)>0?'b-ok':'b-warn';
-  const bt    = abs<3?'≈ Im Korridor':parseFloat(delta)>0?`▲ +${delta}% über Prognose`:`▼ ${delta}% unter Prognose`;
+  const pred   = computePred(snaps, model.alpha, T, model);
+  const latest = snaps[snaps.length-1];
+  const { F, ciLow, ciHigh, n } = pred;
+  const latestExp  = F*gf(latest.day,model.alpha,T);
+  const delta      = ((latest.cases-latestExp)/latestExp*100).toFixed(1);
+  const abs        = Math.abs(parseFloat(delta));
+  const bc         = abs<3?'b-neu':parseFloat(delta)>0?'b-ok':'b-warn';
+  const bt         = abs<3?'≈ Im Korridor':parseFloat(delta)>0?`▲ +${delta}% über Prognose`:`▼ ${delta}% unter Prognose`;
+  const ciSrc      = n>=2 ? `${n} Snapshots · Residuen-CI` : `historisches CI`;
   document.getElementById('pred-content').innerHTML = `
     <div class="pbox">
       <div class="plbl">Vorhergesagte Quartalsfälle</div>
       <div class="pbig">${Math.round(F).toLocaleString('de')}</div>
-      <div class="pci">90%-KI: <strong>${Math.round(Fl).toLocaleString('de')}</strong> – <strong>${Math.round(Fh).toLocaleString('de')}</strong></div>
+      <div class="pci">90%-KI: <strong>${Math.round(ciLow).toLocaleString('de')}</strong> – <strong>${Math.round(ciHigh).toLocaleString('de')}</strong>
+        <span style="font-size:10px;margin-left:4px;opacity:.65">(${ciSrc})</span></div>
       <div class="pmeta">Basis: ${latest.cases.toLocaleString('de')} Fälle am ${latest.date} · T${latest.day} · ${pct}%</div>
       <span class="badge ${bc}">${bt}</span>
     </div>`;
@@ -528,21 +587,26 @@ function renderPredCard() {
 
 function renderModelCard() {
   const card  = document.getElementById('model-card');
-  const model = fitModel(historical);
+  const snaps = qstart ? predictions.filter(p=>p.qstart===qstart) : [];
+  const model = fitModel(historical, snaps);
   if (!model) { card.style.display='none'; return; }
   card.style.display='';
+  const parts = [];
+  if (model.valid.length) parts.push(`${model.valid.length} Quartale`);
+  if (model.nSnapPairs>0) parts.push(`${model.nSnapPairs} Snapshot-Paare`);
   document.getElementById('model-txt').innerHTML =
     `α = <strong style="color:var(--berry)">${model.alpha.toFixed(3)}</strong>
-     &nbsp;·&nbsp; ${model.valid.length} Quartale
-     &nbsp;·&nbsp; ±${(model.stdErr*100).toFixed(1)}% Streuung`;
+     &nbsp;·&nbsp; Quellen: ${parts.join(' + ')}
+     &nbsp;·&nbsp; ±${(model.stdErr*100).toFixed(1)}% hist. Streuung`;
 }
 
 const HC=['rgba(190,190,210,.65)','rgba(160,180,200,.65)','rgba(180,160,200,.65)',
           'rgba(200,170,180,.65)','rgba(150,170,190,.65)','rgba(180,190,160,.65)'];
 
 function renderChart() {
-  const model = fitModel(historical);
   const T     = qstart ? qT(qstart) : 90;
+  const snaps = qstart ? predictions.filter(p=>p.qstart===qstart).sort((a,b)=>a.day-b.day) : [];
+  const model = fitModel(historical, snaps);
   const xMax  = Math.ceil(T);
   const sets  = [];
 
@@ -557,17 +621,15 @@ function renderChart() {
                borderWidth:1.5,pointRadius:0,tension:.3,borderDash:[4,3],order:10+i});
   });
 
-  if (model && qstart) {
-    const snaps  = predictions.filter(p=>p.qstart===qstart).sort((a,b)=>b.day-a.day);
-    const latest = snaps[0];
-    if (latest) {
-      const F  = latest.cases/gf(latest.day,model.alpha,T);
-      const Fl = F*(model.meanErr-1.65*model.stdErr);
-      const Fh = F*(model.meanErr+1.65*model.stdErr);
+  if (model && qstart && snaps.length) {
+    const pred   = computePred(snaps, model.alpha, T, model);
+    const latest = snaps[snaps.length-1];
+    if (pred) {
+      const { F, ciLow: Fl, ciHigh: Fh } = pred;
       const u=[],l=[],p=[];
       for(let d=0;d<=T;d++){
         const f=gf(d,model.alpha,T);
-        u.push({x:d,y:Fh*f}); l.push({x:d,y:Fl*f}); p.push({x:d,y:F*f});
+        u.push({x:d,y:Fh*f}); l.push({x:d,y:Math.max(0,Fl*f)}); p.push({x:d,y:F*f});
       }
       sets.push({label:'KI 90%',data:u,borderColor:'transparent',
                  backgroundColor:'rgba(146,78,125,.12)',fill:'+1',pointRadius:0,order:3,tension:.3});
@@ -621,19 +683,20 @@ function renderChart() {
 
 function renderSnaps() {
   const container=document.getElementById('snap-list');
-  const model=fitModel(historical);
   const rel=qstart?predictions.filter(p=>p.qstart===qstart).sort((a,b)=>b.day-a.day):[];
   if(!rel.length){
     container.innerHTML='<div class="empty">Noch keine Snapshots.<br>Sage Claude: „Heute haben wir X Fälle"</div>';
     return;
   }
   const T=qstart?qT(qstart):90;
+  const snaps=rel.slice().reverse(); // aufsteigend für computePred
+  const model=fitModel(historical,snaps);
+  const pred=model?computePred(snaps,model.alpha,T,model):null;
   container.innerHTML=rel.map((p,i)=>{
     let badge='';
-    if(model&&i===0){
-      const F=p.cases/gf(p.day,model.alpha,T);
-      const today=new Date().toISOString().slice(0,10);
-      const exp=F*gf(dq(qstart,today),model.alpha,T)*model.meanErr;
+    if(pred&&i===0){
+      const {F}=pred;
+      const exp=F*gf(p.day,model.alpha,T);
       const delta=((p.cases-exp)/exp*100).toFixed(1);
       const abs=Math.abs(parseFloat(delta));
       const bc=abs<3?'b-neu':parseFloat(delta)>0?'b-ok':'b-warn';
