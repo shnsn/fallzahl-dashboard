@@ -257,8 +257,16 @@ let predictions = [];
 let qstart      = '';
 let chart       = null;
 let adminOpen   = false;
+let _patMem     = '';  // Safari-Fallback wenn localStorage blockiert
 
-function getPat() { return localStorage.getItem('fz_pat') || ''; }
+function getPat() {
+  try { return localStorage.getItem('fz_pat') || _patMem; }
+  catch(e) { return _patMem; }
+}
+function setPat(v) {
+  _patMem = v;
+  try { localStorage.setItem('fz_pat', v); } catch(e) {}
+}
 
 // ── PAT MODAL ─────────────────────────────────────────────────────────────────
 function openPat()  { document.getElementById('pat-input').value = getPat();
@@ -266,7 +274,7 @@ function openPat()  { document.getElementById('pat-input').value = getPat();
 function closePat() { document.getElementById('pat-modal').classList.remove('open'); }
 function savePat()  {
   const p = document.getElementById('pat-input').value.trim();
-  localStorage.setItem('fz_pat', p);
+  setPat(p);
   closePat();
   updateAdminUI();
   if (adminOpen) showWritePanel();
