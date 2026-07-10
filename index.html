@@ -489,7 +489,7 @@ function fitModel(hist, snaps) {
   if (!histAl.length && !snapAl.length) return null;
 
   // Gewichteter Mittelwert: historisch = 5× pro Datenpunkt, Snapshot-Paar = 1×
-  const HIST_W = 5;
+  const HIST_W = 3;
   let wSum=0, wTot=0;
   histAl.forEach(a => { wSum+=HIST_W*a; wTot+=HIST_W; });
   snapAl.forEach(a => { wSum+=a;        wTot+=1; });
@@ -589,7 +589,11 @@ function renderPredCard() {
   const abs        = Math.abs(parseFloat(delta));
   const bc         = abs<3?'b-neu':parseFloat(delta)>0?'b-ok':'b-warn';
   const bt         = abs<3?'≈ Im Korridor':parseFloat(delta)>0?`▲ +${delta}% über Prognose`:`▼ ${delta}% unter Prognose`;
-  const ciSrc      = n>=2 ? `${n} Snapshots · Residuen-CI` : `historisches CI`;
+  const ciSrc = n>=2 ? `${n} Snapshots · Residuen-CI` : `historisches CI`;
+  const predM1 = Math.round(F * gf(30, model.alpha, T));
+  const predM2 = Math.round(F * gf(60, model.alpha, T));
+  const nowDay = dayNow;
+  const m1done = nowDay >= 30, m2done = nowDay >= 60;
   document.getElementById('pred-content').innerHTML = `
     <div class="pbox">
       <div class="plbl">Vorhergesagte Quartalsfälle</div>
@@ -598,6 +602,18 @@ function renderPredCard() {
         <span style="font-size:10px;margin-left:4px;opacity:.65">(${ciSrc})</span></div>
       <div class="pmeta">Basis: ${latest.cases.toLocaleString('de')} Fälle am ${latest.date} · T${latest.day} · ${pct}%</div>
       <span class="badge ${bc}">${bt}</span>
+    </div>
+    <div style="margin-top:9px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div style="background:var(--rosa);border:1px solid var(--rosa-mid);border-radius:8px;padding:8px 10px;${m1done?'opacity:.5':''}">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px">Prognose M1 · T30</div>
+        <div style="font-size:18px;font-weight:800;color:var(--berry);margin-top:2px">${predM1.toLocaleString('de')}</div>
+        ${m1done?'<div style="font-size:10px;color:var(--muted)">bereits vergangen</div>':''}
+      </div>
+      <div style="background:var(--rosa);border:1px solid var(--rosa-mid);border-radius:8px;padding:8px 10px;${m2done?'opacity:.5':''}">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px">Prognose M2 · T60</div>
+        <div style="font-size:18px;font-weight:800;color:var(--berry);margin-top:2px">${predM2.toLocaleString('de')}</div>
+        ${m2done?'<div style="font-size:10px;color:var(--muted)">bereits vergangen</div>':''}
+      </div>
     </div>`;
 }
 
