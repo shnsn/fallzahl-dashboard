@@ -195,6 +195,7 @@
       </div>
       <div id="edit-rows"></div>
       <button class="btn btn-add" onclick="addRow()">+ Quartal hinzufügen</button>
+      <button class="btn btn-add" onclick="prefillHistorical()" style="margin-top:4px;border-color:var(--berry-mid);color:var(--berry-mid)">📋 Historische Daten 2021–2025 vorausfüllen</button>
       <p class="note" style="margin-top:5px">M1 und M2 optional — werden nur für α-Schätzung und historische Kurven genutzt. Für Saisonfaktoren reicht M3.</p>
       <hr class="divider">
       <!-- Aktuellen Wert eingeben -->
@@ -456,6 +457,53 @@ function addRow() {
     <button class="btn btn-ghost" onclick="this.closest('.edit-row').remove()">✕</button>`;
   container.appendChild(row);
   row.querySelector('input').focus();
+}
+
+function prefillHistorical() {
+  const HIST = [
+    {label:'Q1 2021',                   m3:2874},
+    {label:'Q2 2021',                   m3:3916},
+    {label:'Q3 2021',                   m3:3640},
+    {label:'Q4 2021',                   m3:4179},
+    {label:'Q1 2022',                   m3:3700},
+    {label:'Q2 2022',                   m3:3453},
+    {label:'Q3 2022',                   m3:3595},
+    {label:'Q4 2022',                   m3:3862},
+    {label:'Q1 2023',                   m3:3652},
+    {label:'Q2 2023',                   m3:3907},
+    {label:'Q3 2023',                   m3:4312},
+    {label:'Q4 2023',                   m3:4295},
+    {label:'Q1 2024', m1:2342, m2:3598, m3:4388},
+    {label:'Q2 2024',                   m3:4509},
+    {label:'Q3 2024',                   m3:4890},
+    {label:'Q4 2024',                   m3:4634},
+    {label:'Q1 2025', m1:2715, m2:3664, m3:4827},
+    {label:'Q2 2025',                   m3:4597},
+    {label:'Q3 2025',                   m3:4812},
+    {label:'Q4 2025',                   m3:4859},
+  ];
+  // Bestehende Labels sammeln um Duplikate zu vermeiden
+  const existing = new Set(
+    [...document.querySelectorAll('.edit-row')]
+      .map(r => r.querySelector('input').value.trim())
+      .filter(Boolean)
+  );
+  const container = document.getElementById('edit-rows');
+  let added = 0;
+  for (const q of HIST) {
+    if (existing.has(q.label)) continue;
+    const row = document.createElement('div');
+    row.className = 'field-4 edit-row';
+    row.innerHTML = `
+      <input type="text"   value="${q.label}" style="font-weight:600">
+      <input type="number" value="${q.m1||''}" placeholder="M1">
+      <input type="number" value="${q.m2||''}" placeholder="M2">
+      <input type="number" value="${q.m3}"     placeholder="M3">
+      <button class="btn btn-ghost" onclick="this.closest('.edit-row').remove()">✕</button>`;
+    container.appendChild(row);
+    added++;
+  }
+  showStatus('inf', `✓ ${added} Quartale eingefügt — jetzt auf GitHub speichern.`);
 }
 
 // ── MODELL ────────────────────────────────────────────────────────────────────
