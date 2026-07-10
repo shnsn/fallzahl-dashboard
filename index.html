@@ -247,6 +247,14 @@
 </div>
 
 <script>
+// ── HILFSFUNKTIONEN ───────────────────────────────────────────────────────────
+function toB64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin);
+}
+
 // ── KONSTANTEN ────────────────────────────────────────────────────────────────
 const OWNER    = 'shnsn';
 const REPO     = 'fallzahl-dashboard';
@@ -392,7 +400,7 @@ async function saveAll() {
       },
       body: JSON.stringify({
         message: 'Fallzahlen Update ' + new Date().toISOString().slice(0,10),
-        content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
+        content: toB64(JSON.stringify(data, null, 2)),
         sha,
       })
     });
