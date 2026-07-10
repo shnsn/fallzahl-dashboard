@@ -195,6 +195,7 @@
       </div>
       <div id="edit-rows"></div>
       <button class="btn btn-add" onclick="addRow()">+ Quartal hinzufügen</button>
+      <p class="note" style="margin-top:5px">M1 und M2 optional — werden nur für α-Schätzung und historische Kurven genutzt. Für Saisonfaktoren reicht M3.</p>
       <hr class="divider">
       <!-- Aktuellen Wert eingeben -->
       <div class="ctitle" style="margin-top:6px">Aktueller Wert</div>
@@ -344,7 +345,7 @@ async function saveAll() {
     const current = await getResp.json();
     const sha     = current.sha;
 
-    // 2) Daten aus Edit-Rows lesen
+    // 2) Daten aus Edit-Rows lesen — M1/M2 optional, nur M3 Pflicht
     const rows = document.querySelectorAll('.edit-row');
     const newHist = [];
     rows.forEach(row => {
@@ -353,8 +354,11 @@ async function saveAll() {
       const m1    = parseFloat(inputs[1].value);
       const m2    = parseFloat(inputs[2].value);
       const m3    = parseFloat(inputs[3].value);
-      if (label && !isNaN(m1) && !isNaN(m2) && !isNaN(m3)) {
-        newHist.push({ label, m1, m2, m3 });
+      if (label && !isNaN(m3)) {
+        const entry = { label, m3 };
+        if (!isNaN(m1)) entry.m1 = m1;
+        if (!isNaN(m2)) entry.m2 = m2;
+        newHist.push(entry);
       }
     });
 
@@ -478,7 +482,7 @@ function fitModel(hist, snaps) {
       for (let j=i+1; j<sorted.length; j++) {
         const d1=sorted[i].day, c1=sorted[i].cases;
         const d2=sorted[j].day, c2=sorted[j].cases;
-        if (d2>d1 && c2>c1 && d1>7 && (d2-d1)>=14) {
+        if (d2>d1 && c2>c1 && d1>2 && (d2-d1)>=5) {
           const ap = Math.log(c1/c2)/Math.log(d1/d2);
           if (ap>0.1 && ap<2.0) { snapAl.push(ap); nSnapPairs++; }
         }
@@ -544,6 +548,41 @@ function computePred(snaps, alpha, T, model) {
 function gf(d,a,T) { return d<=0?0:d>=T?1:Math.pow(d/T,a); }
 function qT(s)     { const d=new Date(s); d.setMonth(d.getMonth()+3); return (d-new Date(s))/86400000; }
 function dq(s,c)   { return Math.max(0,(new Date(c)-new Date(s))/86400000); }
+// Quartal-Saison aus Quartalstart-Datum
+function qSeason(qs) {
+  const m = new Date(qs).getMonth(); // 0-11
+  if (m <= 2) return 'Q1';
+  if (m <= 5) return 'Q2';
+  if (m <= 8) return 'Q3';
+  return 'Q4';
+}
+
+// Saisonfaktoren auto-berechnen aus historischen M3-Daten (Q/Q1-Verhältnis pro Jahr)
+function computeSeasonalFactors(hist) {
+  const byYear = {};
+  for (const q of hist) {
+    if (!q.m3 || !q.label) continue;
+    const m = q.label.trim().match(/^(Q[1-4])\s*(\d{4})$/i);
+    if (!m) continue;
+    const qtr = m[1].toUpperCase(), yr = m[2];
+    if (!byYear[yr]) byYear[yr] = {};
+    byYear[yr][qtr] = q.m3;
+  }
+  const ratios = { Q2:[], Q3:[], Q4:[] };
+  for (const y of Object.values(byYear)) {
+    if (!y.Q1) continue;
+    ['Q2','Q3','Q4'].forEach(q => { if (y[q]) ratios[q].push(y[q] / y.Q1); });
+  }
+  const sf = { Q1:1.0 };
+  ['Q2','Q3','Q4'].forEach(q => {
+    sf[q] = ratios[q].length
+      ? ratios[q].reduce((a,b) => a+b, 0) / ratios[q].length
+      : 1.0;
+  });
+  return sf;
+}
+
+function getSF(qs) { return computeSeasonalFactors(historical)[qSeason(qs)] || 1.0; }
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function renderAll() {
@@ -560,8 +599,8 @@ function renderHistTable() {
     ? '<tr><td colspan="4"><div class="empty">Noch keine Daten.</div></td></tr>'
     : historical.map(q=>`<tr>
         <td>${q.label||'—'}</td>
-        <td>${(q.m1||0).toLocaleString('de')}</td>
-        <td>${(q.m2||0).toLocaleString('de')}</td>
+        <td style="${!q.m1?'color:var(--border)':''}">${q.m1 ? q.m1.toLocaleString('de') : '—'}</td>
+        <td style="${!q.m2?'color:var(--border)':''}">${q.m2 ? q.m2.toLocaleString('de') : '—'}</td>
         <td>${(q.m3||0).toLocaleString('de')}</td>
       </tr>`).join('');
 }
@@ -583,20 +622,24 @@ function renderPredCard() {
   }
   const pred   = computePred(snaps, model.alpha, T, model);
   const latest = snaps[snaps.length-1];
-  const { F, ciLow, ciHigh, n } = pred;
+  const { F: Fraw, ciLow: ciLowRaw, ciHigh: ciHighRaw, n } = pred;
+  const sf     = getSF(qstart);
+  const F      = Fraw * sf;
+  const ciLow  = ciLowRaw * sf;
+  const ciHigh = ciHighRaw * sf;
   const latestExp  = F*gf(latest.day,model.alpha,T);
   const delta      = ((latest.cases-latestExp)/latestExp*100).toFixed(1);
   const abs        = Math.abs(parseFloat(delta));
   const bc         = abs<3?'b-neu':parseFloat(delta)>0?'b-ok':'b-warn';
   const bt         = abs<3?'≈ Im Korridor':parseFloat(delta)>0?`▲ +${delta}% über Prognose`:`▼ ${delta}% unter Prognose`;
-  const ciSrc = n>=2 ? `${n} Snapshots · Residuen-CI` : `historisches CI`;
+  const ciSrc      = n>=2 ? `${n} Snapshots · Residuen-CI` : `historisches CI`;
+  const sfLabel    = sf !== 1.0 ? ` · Saisonfaktor ${qSeason(qstart)}: ${(sf*100).toFixed(0)}%` : '';
   const predM1 = Math.round(F * gf(30, model.alpha, T));
   const predM2 = Math.round(F * gf(60, model.alpha, T));
-  const nowDay = dayNow;
-  const m1done = nowDay >= 30, m2done = nowDay >= 60;
+  const m1done = dayNow >= 30, m2done = dayNow >= 60;
   document.getElementById('pred-content').innerHTML = `
     <div class="pbox">
-      <div class="plbl">Vorhergesagte Quartalsfälle</div>
+      <div class="plbl">Vorhergesagte Quartalsfälle${sfLabel}</div>
       <div class="pbig">${Math.round(F).toLocaleString('de')}</div>
       <div class="pci">90%-KI: <strong>${Math.round(ciLow).toLocaleString('de')}</strong> – <strong>${Math.round(ciHigh).toLocaleString('de')}</strong>
         <span style="font-size:10px;margin-left:4px;opacity:.65">(${ciSrc})</span></div>
@@ -626,10 +669,22 @@ function renderModelCard() {
   const parts = [];
   if (model.valid.length) parts.push(`${model.valid.length} Quartale`);
   if (model.nSnapPairs>0) parts.push(`${model.nSnapPairs} Snapshot-Paare`);
+  const sfAll  = computeSeasonalFactors(historical);
+  const sfLine = ['Q1','Q2','Q3','Q4']
+    .map(q => {
+      const v = sfAll[q];
+      const hi = v > 1.02, lo = v < 0.98;
+      const col = hi ? 'var(--ok)' : lo ? 'var(--warn)' : 'var(--muted)';
+      return `${q}: <strong style="color:${col}">${(v*100).toFixed(0)}%</strong>`;
+    }).join(' · ');
+  const nYears = Object.values(
+    historical.reduce((acc,q)=>{ const m=q.label?.match(/\d{4}/); if(m)acc[m[0]]=1; return acc;},{})
+  ).length;
   document.getElementById('model-txt').innerHTML =
     `α = <strong style="color:var(--berry)">${model.alpha.toFixed(3)}</strong>
      &nbsp;·&nbsp; Quellen: ${parts.join(' + ')}
-     &nbsp;·&nbsp; ±${(model.stdErr*100).toFixed(1)}% hist. Streuung`;
+     &nbsp;·&nbsp; ±${(model.stdErr*100).toFixed(1)}% hist. Streuung
+     <br><span style="display:block;margin-top:3px;font-size:10px">Saisonfaktoren (${nYears} Jahre): ${sfLine}</span>`;
 }
 
 const HC=['rgba(190,190,210,.65)','rgba(160,180,200,.65)','rgba(180,160,200,.65)',
@@ -657,7 +712,10 @@ function renderChart() {
     const pred   = computePred(snaps, model.alpha, T, model);
     const latest = snaps[snaps.length-1];
     if (pred) {
-      const { F, ciLow: Fl, ciHigh: Fh } = pred;
+      const sf = getSF(qstart);
+      const F  = pred.F  * sf;
+      const Fl = pred.ciLow  * sf;
+      const Fh = pred.ciHigh * sf;
       const u=[],l=[],p=[];
       for(let d=0;d<=T;d++){
         const f=gf(d,model.alpha,T);
