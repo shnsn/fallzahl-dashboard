@@ -286,8 +286,8 @@ function savePat()  {
   const p = document.getElementById('pat-input').value.trim();
   setPat(p);
   closePat();
+  adminOpen = true;  // Fix: Admin-Panel direkt öffnen nach Token-Eingabe
   updateAdminUI();
-  if (adminOpen) showWritePanel();
 }
 
 // ── ADMIN TOGGLE ──────────────────────────────────────────────────────────────
@@ -345,6 +345,7 @@ async function saveAll() {
   try {
     // 1) Aktuellen SHA von GitHub API holen (IMMER frisch — verhindert Conflict-Fehler)
     const getResp = await fetch(API_URL, {
+      cache: 'no-store',  // Fix: verhindert gecachten SHA → 422 beim 2. Save
       headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
     });
     if (!getResp.ok) {
@@ -363,10 +364,10 @@ async function saveAll() {
       const m1    = parseFloat(inputs[1].value);
       const m2    = parseFloat(inputs[2].value);
       const m3    = parseFloat(inputs[3].value);
-      if (label && !isNaN(m3)) {
+      if (label && !isNaN(m3) && m3 > 0) {  // Fix: negatives/null M3 abweisen
         const entry = { label, m3 };
-        if (!isNaN(m1)) entry.m1 = m1;
-        if (!isNaN(m2)) entry.m2 = m2;
+        if (!isNaN(m1) && m1 > 0) entry.m1 = m1;
+        if (!isNaN(m2) && m2 > 0) entry.m2 = m2;
         newHist.push(entry);
       }
     });
@@ -378,6 +379,7 @@ async function saveAll() {
     const qsVal    = document.getElementById('qstart-inp').value;
     if (!isNaN(casesVal) && casesVal > 0 && dateVal && qsVal) {
       const day = Math.round((new Date(dateVal) - new Date(qsVal)) / 86400000);
+      if (day <= 0) throw new Error('Snapshot-Datum darf nicht vor oder am Quartalstart liegen.');
       newPreds.push({
         id: Date.now(), date: dateVal, qstart: qsVal,
         day, cases: casesVal, predicted: null, ciLow: null, ciHigh: null
@@ -385,7 +387,11 @@ async function saveAll() {
     }
 
     const data = {
-      historical: newHist.sort((a,b) => a.label.localeCompare(b.label)),
+      // Fix: chronologische Sortierung statt lexikographisch ("Q4 2021" vor "Q1 2022")
+      historical: newHist.sort((a,b) => {
+        const p = s => { const m = s?.match(/Q(\d)\s*(\d{4})/i); return m ? parseInt(m[2])*4+parseInt(m[1]) : 0; };
+        return p(a.label) - p(b.label);
+      }),
       predictions: newPreds,
       qstart: qsVal || qstart,
     };
@@ -446,9 +452,9 @@ function renderEditRows() {
     row.className = 'field-4 edit-row';
     row.innerHTML = `
       <input type="text"   value="${q.label||''}" placeholder="Q1 2026" style="font-weight:600">
-      <input type="number" value="${q.m1||''}"    placeholder="M1">
-      <input type="number" value="${q.m2||''}"    placeholder="M2">
-      <input type="number" value="${q.m3||''}"    placeholder="M3">
+      <input type="number" value="${q.m1 != null ? q.m1 : ''}" placeholder="M1">
+      <input type="number" value="${q.m2 != null ? q.m2 : ''}" placeholder="M2">
+      <input type="number" value="${q.m3 != null ? q.m3 : ''}" placeholder="M3">
       <button class="btn btn-ghost" onclick="this.closest('.edit-row').remove()" title="Löschen">✕</button>`;
     container.appendChild(row);
   });
@@ -515,8 +521,8 @@ function prefillHistorical() {
 }
 
 // ── MODELL ────────────────────────────────────────────────────────────────────
-// fitModel(hist, snaps): historische Quartale (5× Gewicht) + Snapshot-Paare (1× Gewicht)
-// Snapshot-Paare nur wenn Abstand ≥14 Tage und beide Tage >7 (Frühquartal zu rauschig)
+// fitModel(hist, snaps): historische Quartale (3× Gewicht) + Snapshot-Paare (1× Gewicht)
+// Snapshot-Paare nur wenn erster Tag >2 und Abstand ≥5 Tage
 function fitModel(hist, snaps) {
   const v = hist.filter(q => q.m1>0 && q.m2>0 && q.m3>0);
 
@@ -587,8 +593,12 @@ function computePred(snaps, alpha, T, model) {
     const res=snaps.map(s=>s.cases-F*gf(s.day,alpha,T));
     const sigma2=res.reduce((a,r)=>a+r*r,0)/(snaps.length-1);
     const seF=Math.sqrt(sigma2/den);
-    ciLow  = F-1.65*seF;
-    ciHigh = F+1.65*seF;
+    // Fix: t-Verteilung statt z für kleine n (z.B. n=2: t_{0.95,df=1}=6.31, nicht 1.65)
+    const T_TABLE=[Infinity,6.314,2.920,2.353,2.132,2.015,1.943,1.895,1.860,1.833,1.812];
+    const df=snaps.length-1;
+    const tVal=df<T_TABLE.length?T_TABLE[df]:1.65;
+    ciLow  = F-tVal*seF;
+    ciHigh = F+tVal*seF;
     // Mindestbreite 2%
     const hw=Math.max(F*0.02,(ciHigh-ciLow)/2);
     ciLow=F-hw; ciHigh=F+hw;
@@ -677,6 +687,11 @@ function renderPredCard() {
     return;
   }
   const pred   = computePred(snaps, model.alpha, T, model);
+  if (!pred) {  // Fix: null-Check — tritt auf wenn alle Snapshots day=0 haben
+    document.getElementById('pred-content').innerHTML =
+      '<div class="empty">Snapshot-Tag ungültig (Tag 0). Bitte Quartalstart prüfen.</div>';
+    return;
+  }
   const latest = snaps[snaps.length-1];
   const { F: Fraw, ciLow: ciLowRaw, ciHigh: ciHighRaw, n } = pred;
   const sf     = getSF(qstart);
@@ -690,9 +705,26 @@ function renderPredCard() {
   const bt         = abs<3?'≈ Im Korridor':parseFloat(delta)>0?`▲ +${delta}% über Prognose`:`▼ ${delta}% unter Prognose`;
   const ciSrc      = n>=2 ? `${n} Snapshots · Residuen-CI` : `historisches CI`;
   const sfLabel    = sf !== 1.0 ? ` · Saisonfaktor ${qSeason(qstart)}: ${(sf*100).toFixed(0)}%` : '';
-  const predM1 = Math.round(F * gf(30, model.alpha, T));
-  const predM2 = Math.round(F * gf(60, model.alpha, T));
-  const m1done = dayNow >= 30, m2done = dayNow >= 60;
+  // Echte Monatsgrenzen berechnen (nicht hardcoded 30/60)
+  const qsDate  = new Date(qstart);
+  const dayM1end = Math.round((new Date(qsDate.getFullYear(), qsDate.getMonth()+1, 0) - qsDate) / 86400000);
+  const dayM2end = Math.round((new Date(qsDate.getFullYear(), qsDate.getMonth()+2, 0) - qsDate) / 86400000);
+  const m1done = dayNow >= dayM1end, m2done = dayNow >= dayM2end;
+
+  // Wenn Meilenstein vergangen: echten Ist-Wert aus Snapshots zeigen (letzter Snapshot ≤ Monatsende)
+  // Wenn noch ausstehend: Modellprognose zeigen
+  const snapAtOrBefore = (maxDay) => {
+    const s = snaps.filter(x => x.day <= maxDay);
+    return s.length ? s[s.length-1].cases : null;
+  };
+  const actualM1  = m1done ? snapAtOrBefore(dayM1end) : null;
+  const actualM2  = m2done ? snapAtOrBefore(dayM2end) : null;
+  const predM1val = actualM1 != null ? actualM1 : Math.round(F * gf(dayM1end, model.alpha, T));
+  const predM2val = actualM2 != null ? actualM2 : Math.round(F * gf(dayM2end, model.alpha, T));
+
+  const m1Label = m1done ? (actualM1 != null ? `Ist M1 · T${dayM1end}` : `Prognose M1 · T${dayM1end}`) : `Prognose M1 · T${dayM1end}`;
+  const m2Label = m2done ? (actualM2 != null ? `Ist M2 · T${dayM2end}` : `Prognose M2 · T${dayM2end}`) : `Prognose M2 · T${dayM2end}`;
+
   document.getElementById('pred-content').innerHTML = `
     <div class="pbox">
       <div class="plbl">Vorhergesagte Quartalsfälle${sfLabel}</div>
@@ -703,15 +735,15 @@ function renderPredCard() {
       <span class="badge ${bc}">${bt}</span>
     </div>
     <div style="margin-top:9px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
-      <div style="background:var(--rosa);border:1px solid var(--rosa-mid);border-radius:8px;padding:8px 10px;${m1done?'opacity:.5':''}">
-        <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px">Prognose M1 · T30</div>
-        <div style="font-size:18px;font-weight:800;color:var(--berry);margin-top:2px">${predM1.toLocaleString('de')}</div>
-        ${m1done?'<div style="font-size:10px;color:var(--muted)">bereits vergangen</div>':''}
+      <div style="background:${m1done?'var(--ok-bg)':'var(--rosa)'};border:1px solid ${m1done?'#b2dfdb':'var(--rosa-mid)'};border-radius:8px;padding:8px 10px">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px">${m1Label}</div>
+        <div style="font-size:18px;font-weight:800;color:${m1done?'var(--ok)':'var(--berry)'};margin-top:2px">${predM1val.toLocaleString('de')}</div>
+        <div style="font-size:10px;color:var(--muted)">${m1done ? (actualM1 != null ? '✓ Ist-Wert aus Snapshot' : 'vergangen · kein Snapshot') : 'Hochrechnung'}</div>
       </div>
-      <div style="background:var(--rosa);border:1px solid var(--rosa-mid);border-radius:8px;padding:8px 10px;${m2done?'opacity:.5':''}">
-        <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px">Prognose M2 · T60</div>
-        <div style="font-size:18px;font-weight:800;color:var(--berry);margin-top:2px">${predM2.toLocaleString('de')}</div>
-        ${m2done?'<div style="font-size:10px;color:var(--muted)">bereits vergangen</div>':''}
+      <div style="background:${m2done?'var(--ok-bg)':'var(--rosa)'};border:1px solid ${m2done?'#b2dfdb':'var(--rosa-mid)'};border-radius:8px;padding:8px 10px">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px">${m2Label}</div>
+        <div style="font-size:18px;font-weight:800;color:${m2done?'var(--ok)':'var(--berry)'};margin-top:2px">${predM2val.toLocaleString('de')}</div>
+        <div style="font-size:10px;color:var(--muted)">${m2done ? (actualM2 != null ? '✓ Ist-Wert aus Snapshot' : 'vergangen · kein Snapshot') : 'Hochrechnung'}</div>
       </div>
     </div>`;
 }
