@@ -648,7 +648,14 @@ function computeSeasonalFactors(hist) {
   return sf;
 }
 
-function getSF(qs) { return computeSeasonalFactors(historical)[qSeason(qs)] || 1.0; }
+// SF: voller Wert ohne Snapshots (reine Vorhersage aus Historik);
+// wird stufenweise ausgeblendet wenn echte Snapshots vorliegen — die kennen die Saison schon.
+function getSF(qs, nSnaps) {
+  const sfRaw = computeSeasonalFactors(historical)[qSeason(qs)] || 1.0;
+  const n = nSnaps != null ? nSnaps : 0;
+  const weight = Math.max(0, 1 - n / 5);  // 0 Snaps: voller SF; 5+ Snaps: kein SF
+  return 1 + (sfRaw - 1) * weight;
+}
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function renderAll() {
@@ -694,11 +701,12 @@ function renderPredCard() {
   }
   const latest = snaps[snaps.length-1];
   const { F: Fraw, ciLow: ciLowRaw, ciHigh: ciHighRaw, n } = pred;
-  const sf     = getSF(qstart);
+  const sf     = getSF(qstart, snaps.length);
   const F      = Fraw * sf;
   const ciLow  = ciLowRaw * sf;
   const ciHigh = ciHighRaw * sf;
-  const latestExp  = F*gf(latest.day,model.alpha,T);
+  // Vergleich immer gegen Fraw (ohne SF) — Snapshots sind echte Quartalsdaten
+  const latestExp  = Fraw*gf(latest.day,model.alpha,T);
   const delta      = ((latest.cases-latestExp)/latestExp*100).toFixed(1);
   const abs        = Math.abs(parseFloat(delta));
   const bc         = abs<3?'b-neu':parseFloat(delta)>0?'b-ok':'b-warn';
@@ -765,14 +773,18 @@ function renderModelCard() {
       const col = hi ? 'var(--ok)' : lo ? 'var(--warn)' : 'var(--muted)';
       return `${q}: <strong style="color:${col}">${(v*100).toFixed(0)}%</strong>`;
     }).join(' · ');
+  const sfActive = qstart ? getSF(qstart, snaps.length) : 1.0;
   const nYears = Object.values(
     historical.reduce((acc,q)=>{ const m=q.label?.match(/\d{4}/); if(m)acc[m[0]]=1; return acc;},{})
   ).length;
+  const sfNote = sfActive < 1.005
+    ? `SF deaktiviert (${snaps.length} Snapshots)`
+    : `SF aktiv: ×${sfActive.toFixed(3)}`;
   document.getElementById('model-txt').innerHTML =
     `α = <strong style="color:var(--berry)">${model.alpha.toFixed(3)}</strong>
      &nbsp;·&nbsp; Quellen: ${parts.join(' + ')}
      &nbsp;·&nbsp; ±${(model.stdErr*100).toFixed(1)}% hist. Streuung
-     <br><span style="display:block;margin-top:3px;font-size:10px">Saisonfaktoren (${nYears} Jahre): ${sfLine}</span>`;
+     <br><span style="display:block;margin-top:3px;font-size:10px">Saisonfaktoren (${nYears} Jahre): ${sfLine} &nbsp;·&nbsp; ${sfNote}</span>`;
 }
 
 const HC=['rgba(190,190,210,.65)','rgba(160,180,200,.65)','rgba(180,160,200,.65)',
@@ -800,7 +812,7 @@ function renderChart() {
     const pred   = computePred(snaps, model.alpha, T, model);
     const latest = snaps[snaps.length-1];
     if (pred) {
-      const sf = getSF(qstart);
+      const sf = getSF(qstart, snaps.length);
       const F  = pred.F  * sf;
       const Fl = pred.ciLow  * sf;
       const Fh = pred.ciHigh * sf;
