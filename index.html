@@ -544,7 +544,7 @@ function fitModel(hist, snaps) {
       for (let j=i+1; j<sorted.length; j++) {
         const d1=sorted[i].day, c1=sorted[i].cases;
         const d2=sorted[j].day, c2=sorted[j].cases;
-        if (d2>d1 && c2>c1 && d1>2 && (d2-d1)>=5) {
+        if (d2>d1 && c2>c1 && d1>7 && (d2-d1)>=14) {
           const ap = Math.log(c1/c2)/Math.log(d1/d2);
           if (ap>0.1 && ap<2.0) { snapAl.push(ap); nSnapPairs++; }
         }
@@ -554,8 +554,9 @@ function fitModel(hist, snaps) {
 
   if (!histAl.length && !snapAl.length) return null;
 
-  // Gewichteter Mittelwert: historisch = 5× pro Datenpunkt, Snapshot-Paar = 1×
-  const HIST_W = 3;
+  // Gewichteter Mittelwert: historisch = 10× pro Datenpunkt, Snapshot-Paar = 1×
+  // HIST_W hoch damit ~300 Snapshot-Paare die historischen Alphas nicht überwältigen
+  const HIST_W = 10;
   let wSum=0, wTot=0;
   histAl.forEach(a => { wSum+=HIST_W*a; wTot+=HIST_W; });
   snapAl.forEach(a => { wSum+=a;        wTot+=1; });
@@ -578,13 +579,17 @@ function fitModel(hist, snaps) {
   return { alpha, meanErr, stdErr, valid:v, nSnapPairs };
 }
 
-// Least-Squares Prognose: F = Σ(c_i·f_i) / Σ(f_i²)
+// Rezenz-gewichtetes Least-Squares: F = Σ(w·c_i·f_i) / Σ(w·f_i²)
+// Gewicht w = (Tag/T)² → späte Snapshots zählen ~240× mehr als frühe.
+// Das verhindert, dass der Quartalsstart-Burst (Tage 1-14) F übermäßig aufbläst.
 // CI: aus Residuen wenn n≥2, sonst historisch
 function computePred(snaps, alpha, T, model) {
   if (!snaps || !snaps.length) return null;
   let num=0, den=0;
   for (const s of snaps) {
-    const f=gf(s.day,alpha,T); num+=s.cases*f; den+=f*f;
+    const f=gf(s.day,alpha,T);
+    const w=Math.pow(s.day/T, 2);  // Rezenz-Gewicht
+    num+=w*s.cases*f; den+=w*f*f;
   }
   if (!den) return null;
   const F=num/den;
