@@ -331,11 +331,11 @@
       "ciHigh": null
     },
     {
-      "id": 1789625395515,
-      "date": "2026-09-10",
+      "id": 1789625450751,
+      "date": "2026-09-16",
       "qstart": "2026-07-01",
-      "day": 71,
-      "cases": 4099,
+      "day": 77,
+      "cases": 4245,
       "predicted": null,
       "ciLow": null,
       "ciHigh": null
