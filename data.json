@@ -381,41 +381,11 @@
       "ciHigh": null
     },
     {
-      "id": 1791226032817,
+      "id": 1791226133256,
       "date": "2026-09-25",
       "qstart": "2026-07-01",
       "day": 86,
       "cases": 4559,
-      "predicted": null,
-      "ciLow": null,
-      "ciHigh": null
-    },
-    {
-      "id": 1791226045412,
-      "date": "2026-09-28",
-      "qstart": "2026-07-01",
-      "day": 89,
-      "cases": 4611,
-      "predicted": null,
-      "ciLow": null,
-      "ciHigh": null
-    },
-    {
-      "id": 1791226061363,
-      "date": "2026-09-29",
-      "qstart": "2026-07-01",
-      "day": 90,
-      "cases": 4663,
-      "predicted": null,
-      "ciLow": null,
-      "ciHigh": null
-    },
-    {
-      "id": 1791226073106,
-      "date": "2026-09-30",
-      "qstart": "2026-07-01",
-      "day": 91,
-      "cases": 4716,
       "predicted": null,
       "ciLow": null,
       "ciHigh": null
