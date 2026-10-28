@@ -569,6 +569,16 @@
       "predicted": null,
       "ciLow": null,
       "ciHigh": null
+    },
+    {
+      "id": 1793209021433,
+      "date": "2026-10-28",
+      "qstart": "2026-10-01",
+      "day": 27,
+      "cases": 2712,
+      "predicted": null,
+      "ciLow": null,
+      "ciHigh": null
     }
   ],
   "qstart": "2026-10-01"
